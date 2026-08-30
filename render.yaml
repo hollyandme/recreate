@@ -1,0 +1,45 @@
+# Render blueprint. Optional — the same four commands work on Railway, Fly or a
+# VPS; this just means you do not have to type them into a form correctly.
+#
+# Render reads this when you create a Blueprint from the repo.
+
+services:
+  - type: web
+    name: recreate
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    # Migrations run before the new version takes traffic. preDeployCommand is a
+    # paid-plan feature; on the free tier, drop this line and run
+    # `npm run migrate:prod` once from the service Shell after the first deploy.
+    preDeployCommand: npm run migrate:prod
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Load-bearing: without it the server runs API-only and every page 404s.
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recreate-db
+          property: connectionString
+      # Managed Postgres presents a certificate Node will not verify by default.
+      - key: DATABASE_SSL
+        value: require
+      # Screenshot storage. The container filesystem is wiped on every deploy,
+      # so these are not optional — without them uploads vanish on the first
+      # redeploy, silently, because the rows still hold their keys.
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+databases:
+  - name: recreate-db
+    plan: basic-256mb
