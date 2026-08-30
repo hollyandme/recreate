@@ -180,6 +180,26 @@ Required environment:
 | `S3_BUCKET`    | see below — **not optional in most deployments**              |
 | `PORT`         | usually injected by the host                                  |
 
+### Railway instead of Render
+
+Everything above applies; `railway.json` carries the build command, start command and
+health check. Three differences:
+
+**`render.yaml` is ignored.** Railway does not read it. The database, the volume and
+the environment variables are created in Railway's UI rather than declared in a file.
+
+**Leave `DATABASE_SSL` unset.** This is the opposite of Render. Railway's Postgres
+plugin gives the service an internal URL over private networking with no TLS, so
+`DATABASE_SSL=require` makes the connection fail. Only set it to `require` if you
+deliberately connect through Railway's *public* proxy URL instead.
+
+**Attach a volume for screenshots**, then set `UPLOAD_DIR` to its mount path — an
+absolute path, e.g. `/data/uploads`. Without a volume the filesystem is ephemeral and
+every screenshot disappears on the next deploy. Same trap as Render, different UI.
+
+Also set `NODE_ENV=production`, and run `npm run migrate:prod` before the first boot —
+either as a pre-deploy command in the service settings, or once from the shell.
+
 ### Screenshots need somewhere that survives a deploy
 
 Render, Railway and Fly all give a container an **ephemeral filesystem**: it is wiped on
