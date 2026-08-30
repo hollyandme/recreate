@@ -166,6 +166,12 @@ start:  NODE_ENV=production npm start        # must be production, or the client
 health: /api/health
 ```
 
+The health check queries a real table rather than returning a constant, so a
+container that booted against an unreachable or unmigrated database reports 503
+and the deploy fails visibly — instead of going green and breaking on the first
+click. `503 {"ok":false,"error":"database has no tables …"}` means the release
+step did not run.
+
 `--include=dev` on the build install is not optional. `NODE_ENV=production` is needed at
 runtime, but hosts apply it at build time too, and npm then omits devDependencies —
 where `typescript` and `vite` live. Without the flag the build dies on `tsc: not found`.

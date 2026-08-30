@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 
+import { pool } from './lib/db.js';
 import { errorHandler } from './lib/http.js';
 import { tags } from './routes/tags.js';
 import { ideas } from './routes/ideas.js';
@@ -22,8 +23,23 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use(express.json({ limit: '1mb' }));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true });
+/**
+ * Health check. Deliberately queries a real table rather than returning a
+ * constant: the host uses this to decide whether a deploy succeeded, and a
+ * process that booted with an unreachable or unmigrated database is not
+ * healthy — it just fails on the first click instead of at deploy time.
+ */
+app.get('/api/health', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1 FROM ideas LIMIT 1');
+    res.json({ ok: true });
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    res.status(503).json({
+      ok: false,
+      error: code === '42P01' ? 'database has no tables — migrations have not run' : 'database unreachable',
+    });
+  }
 });
 
 app.use('/api/tags', tags);
