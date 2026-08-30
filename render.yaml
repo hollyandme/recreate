@@ -15,6 +15,16 @@ services:
     preDeployCommand: npm run migrate:prod
     startCommand: npm start
     healthCheckPath: /api/health
+    # Screenshots live here. The container filesystem is wiped on every deploy;
+    # a disk is not. Requires a paid instance type, which `plan: starter` is.
+    #
+    # A disk is tied to one instance, so this does not scale horizontally. To
+    # move to object storage later, set S3_BUCKET and friends and drop this
+    # block — no code change, the storage driver switches on the env var.
+    disk:
+      name: recreate-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 5
     envVars:
       # Load-bearing: without it the server runs API-only and every page 404s.
       - key: NODE_ENV
@@ -26,19 +36,12 @@ services:
       # Managed Postgres presents a certificate Node will not verify by default.
       - key: DATABASE_SSL
         value: require
-      # Screenshot storage. The container filesystem is wiped on every deploy,
-      # so these are not optional — without them uploads vanish on the first
-      # redeploy, silently, because the rows still hold their keys.
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ENDPOINT
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
+      # Absolute path, matching the disk mount above.
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      # To switch to S3/R2 instead, set these and remove the disk block:
+      #   S3_BUCKET, S3_ENDPOINT, AWS_REGION,
+      #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
 databases:
   - name: recreate-db

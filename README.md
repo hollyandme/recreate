@@ -180,20 +180,25 @@ Required environment:
 | `S3_BUCKET`    | see below — **not optional in most deployments**              |
 | `PORT`         | usually injected by the host                                  |
 
-### Screenshots need a bucket
+### Screenshots need somewhere that survives a deploy
 
-Render, Railway and Fly all give a container an **ephemeral filesystem**: it is wiped
-on every deploy and restart. The local-disk driver is a development convenience — ship
-it that way and every screenshot 404s after the first redeploy, silently, because the
-rows still hold their keys.
+Render, Railway and Fly all give a container an **ephemeral filesystem**: it is wiped on
+every deploy and restart. Point `UPLOAD_DIR` at the container's own disk and every
+screenshot 404s after the first redeploy — silently, because the rows still hold their
+keys. Two ways out:
 
-Set `S3_BUCKET` (plus `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and
-`S3_ENDPOINT` for R2/MinIO). Cloudflare R2 is the cheap default — S3-compatible with no
-egress fees. The alternative is a host-attached persistent disk mounted at `UPLOAD_DIR`,
-which works but does not survive moving hosts and will not scale past one instance.
+**A persistent disk** (what `render.yaml` does). Mount it and set `UPLOAD_DIR` to the
+absolute mount path. Uses the local-storage driver, which is the path exercised in
+testing. Requires a paid instance type, is tied to one instance so it does not scale
+horizontally, and does not come with you if you change hosts.
 
-The S3 driver is written against the standard SDK but has only been exercised against
-the local driver here — test one upload immediately after the first deploy.
+**Object storage.** Set `S3_BUCKET`, `S3_ENDPOINT`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`
+and `AWS_SECRET_ACCESS_KEY`, and remove the disk. Cloudflare R2 is the cheap default —
+S3-compatible, no egress fees. Portable and scales past one instance.
+
+Switching between them is env vars only; the driver is chosen by whether `S3_BUCKET` is
+set. Note the S3 driver is written against the standard SDK but has only ever been
+exercised against the local driver — test one upload right after switching.
 
 ### Access: deliberately open
 
