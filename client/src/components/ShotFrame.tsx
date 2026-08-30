@@ -74,17 +74,21 @@ export function ShotFrame({ shot, drawing, onUpload, onClearImage, onCommitStrok
             <span>Drop the frame</span>
           </span>
         )}
-        <input
-          ref={fileInput}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-          hidden
-          onChange={(e) => {
-            takeFile(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
       </div>
+
+      {/* Deliberately a sibling of the slot, not a child: opening the picker
+          calls .click() on it, and from inside the slot that click bubbles
+          straight back into the slot's own onClick and re-enters it. */}
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        hidden
+        onChange={(e) => {
+          takeFile(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
 
       {shot.imageUrl && !drawing && (
         <button className="slot-clear no-print" title="Remove this screenshot" onClick={onClearImage}>
