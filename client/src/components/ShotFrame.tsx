@@ -34,8 +34,12 @@ export function ShotFrame({ shot, drawing, onUpload, onClearImage, onCommitStrok
     ];
   };
 
+  // Never drop a file silently. The browser's reported type is unreliable — it
+  // is routinely empty for a perfectly good PNG — so anything the user picked is
+  // sent, and the server decides from the actual bytes. A rejection then comes
+  // back as a message the user can act on, rather than as nothing happening.
   const takeFile = (file: File | undefined) => {
-    if (file && file.type.startsWith('image/')) onUpload(file);
+    if (file) onUpload(file);
   };
 
   // Strokes commit on pointer-up; until then the in-progress one is drawn on top.
@@ -82,7 +86,7 @@ export function ShotFrame({ shot, drawing, onUpload, onClearImage, onCommitStrok
       <input
         ref={fileInput}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.avif"
         hidden
         onChange={(e) => {
           takeFile(e.target.files?.[0]);

@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { one } from '../lib/db.js';
 import { h, idParam, HttpError } from '../lib/http.js';
 import { removeImageForShot } from '../lib/cleanup.js';
-import { ALLOWED_IMAGE_TYPES, newImageKey, storage } from '../lib/storage.js';
+import { newImageKey, storage } from '../lib/storage.js';
+import { sniffImageType } from '../lib/sniff.js';
 import { serializeShot } from './briefs.js';
 
 export const shots = Router();
@@ -62,11 +63,8 @@ shots.delete(
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, file, cb) => {
-    // Trusting the declared type only to pick an extension; the key is a UUID
-    // and the file is served with an explicit type, so a lie buys nothing.
-    cb(null, ALLOWED_IMAGE_TYPES.includes(file.mimetype));
-  },
+  // No fileFilter: the browser's declared type is unreliable — routinely empty
+  // for a perfectly good PNG — so the bytes are inspected after upload instead.
 });
 
 /**
@@ -88,8 +86,19 @@ shots.post(
     );
     if (!existing) throw new HttpError(404, 'Shot not found');
 
-    const key = newImageKey(file.mimetype);
-    await storage.put(key, file.buffer, file.mimetype);
+    const sniffed = sniffImageType(file.buffer);
+    if (sniffed === 'image/heic') {
+      throw new HttpError(
+        415,
+        'HEIC images cannot be displayed in a browser. Export the screenshot as PNG or JPEG and try again.',
+      );
+    }
+    if (!sniffed) {
+      throw new HttpError(415, 'That file is not a PNG, JPEG, GIF, WebP or AVIF image.');
+    }
+
+    const key = newImageKey(sniffed);
+    await storage.put(key, file.buffer, sniffed);
 
     const row = await one('UPDATE shots SET image_key = $2 WHERE id = $1 RETURNING *', [id, key]);
 

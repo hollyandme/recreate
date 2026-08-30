@@ -88,6 +88,21 @@ Either way the client sees one URL shape, `/api/files/<key>`: the local driver s
 the file, the S3 driver redirects to a short-lived signed URL. Keys are UUIDs we mint
 and are pattern-checked before touching any filesystem or bucket call.
 
+## Screenshots
+
+Accepted: PNG, JPEG, GIF, WebP, AVIF, up to 12 MB.
+
+The format is decided by **reading the file's leading bytes**, not by the type the
+browser reports. That type is guesswork from the file extension and is routinely empty
+or wrong depending on where the file came from — trusting it silently rejected real
+screenshots. It also means a non-image cannot be smuggled through by mislabelling it.
+
+HEIC is recognised and refused with a message saying to export as PNG or JPEG, because
+browsers will not render it and accepting it would store an invisible screenshot.
+
+Nothing is ever dropped without saying so: a rejected file produces a message in the UI,
+never a silent no-op.
+
 ## Annotations
 
 A stroke is a list of `[x, y]` points in a **normalised 0–100 space** relative to the
