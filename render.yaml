@@ -8,7 +8,11 @@ services:
     name: recreate
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
+    # --include=dev is required: NODE_ENV=production (set below, and needed at
+    # runtime) otherwise makes npm omit devDependencies, and the build needs
+    # typescript and vite, which live there. Without this the build fails on
+    # `tsc: not found`.
+    buildCommand: npm install --include=dev && npm run build
     # Migrations run before the new version takes traffic. preDeployCommand is a
     # paid-plan feature; on the free tier, drop this line and run
     # `npm run migrate:prod` once from the service Shell after the first deploy.

@@ -161,10 +161,14 @@ The server serves the built client and the API from one process, so this deploys
 **single Node web service** plus a Postgres database plus a bucket.
 
 ```
-build:  npm install && npm run build
+build:  npm install --include=dev && npm run build
 start:  NODE_ENV=production npm start        # must be production, or the client is not served
 health: /api/health
 ```
+
+`--include=dev` on the build install is not optional. `NODE_ENV=production` is needed at
+runtime, but hosts apply it at build time too, and npm then omits devDependencies —
+where `typescript` and `vite` live. Without the flag the build dies on `tsc: not found`.
 
 Run migrations as a release/pre-deploy step — **`npm run migrate:prod`**, not
 `npm run migrate`. The latter needs `tsx`, a devDependency that production installs
