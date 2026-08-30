@@ -1,0 +1,168 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { query, one } from '../lib/db.js';
+import { h, idParam, HttpError } from '../lib/http.js';
+import { detectPlatform, detectSource } from '../lib/links.js';
+import { removeImagesForIdea } from '../lib/cleanup.js';
+
+export const ideas = Router();
+
+export interface IdeaRow {
+  id: number;
+  url: string;
+  platform: string;
+  source_handle: string;
+  note: string;
+  hook: string;
+  body: string;
+  tag_id: number | null;
+  tag_name: string | null;
+  status: string;
+  saved_at: Date;
+  has_brief: boolean;
+  brief_id: number | null;
+}
+
+export function serializeIdea(r: IdeaRow) {
+  return {
+    id: r.id,
+    url: r.url,
+    platform: r.platform,
+    sourceHandle: r.source_handle,
+    note: r.note,
+    hook: r.hook,
+    body: r.body,
+    tagId: r.tag_id,
+    tag: r.tag_name,
+    status: r.status,
+    savedAt: r.saved_at.toISOString(),
+    briefId: r.brief_id,
+  };
+}
+
+const SELECT_IDEA = `
+  SELECT i.*, t.name AS tag_name, b.id AS brief_id, (b.id IS NOT NULL) AS has_brief
+    FROM ideas i
+    LEFT JOIN tags t   ON t.id = i.tag_id
+    LEFT JOIN briefs b ON b.idea_id = i.id`;
+
+/**
+ * The whole library, newest first.
+ *
+ * Filters are offered for API consumers, but the UI deliberately fetches
+ * unfiltered: its tag chips show counts scoped to the *other two* filters, and
+ * computing those from one in-memory list beats a round trip per chip. The
+ * library is a small team's reading list, not a feed.
+ */
+ideas.get(
+  '/',
+  h(async (req, res) => {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const { platform, status, tagId } = req.query;
+
+    if (typeof platform === 'string' && platform !== 'All') {
+      params.push(platform);
+      where.push(`i.platform = $${params.length}`);
+    }
+    if (typeof status === 'string' && status !== 'Any') {
+      params.push(status);
+      where.push(`i.status = $${params.length}`);
+    }
+    if (tagId === 'null') {
+      where.push('i.tag_id IS NULL');
+    } else if (typeof tagId === 'string' && tagId) {
+      params.push(Number(tagId));
+      where.push(`i.tag_id = $${params.length}`);
+    }
+
+    const rows = await query<IdeaRow>(
+      `${SELECT_IDEA} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.saved_at DESC, i.id DESC`,
+      params,
+    );
+    res.json(rows.map(serializeIdea));
+  }),
+);
+
+const CreateBody = z.object({
+  url: z.string().trim().min(1).max(2048),
+  note: z.string().trim().max(2000).optional(),
+  tagId: z.number().int().positive().nullable().optional(),
+});
+
+ideas.post(
+  '/',
+  h(async (req, res) => {
+    const input = CreateBody.parse(req.body);
+    const created = await one<{ id: number }>(
+      `INSERT INTO ideas (url, platform, source_handle, note, tag_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [
+        input.url,
+        detectPlatform(input.url),
+        detectSource(input.url),
+        input.note ?? '',
+        input.tagId ?? null,
+      ],
+    );
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [created!.id]);
+    res.status(201).json(serializeIdea(row!));
+  }),
+);
+
+const PatchBody = z
+  .object({
+    note: z.string().max(2000),
+    hook: z.string().max(4000),
+    body: z.string().max(4000),
+    status: z.enum(['To try', 'Tried']),
+    tagId: z.number().int().positive().nullable(),
+  })
+  .partial();
+
+/** Everything on a card saves as you type, so this is a partial update. */
+ideas.patch(
+  '/:id',
+  h(async (req, res) => {
+    const id = idParam(req);
+    const input = PatchBody.parse(req.body);
+
+    const columns: Record<string, unknown> = {};
+    if (input.note !== undefined) columns.note = input.note;
+    if (input.hook !== undefined) columns.hook = input.hook;
+    if (input.body !== undefined) columns.body = input.body;
+    if (input.status !== undefined) columns.status = input.status;
+    if (input.tagId !== undefined) columns.tag_id = input.tagId;
+
+    const keys = Object.keys(columns);
+    if (keys.length) {
+      const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+      const updated = await one<{ id: number }>(
+        `UPDATE ideas SET ${sets} WHERE id = $1 RETURNING id`,
+        [id, ...keys.map((k) => columns[k])],
+      );
+      if (!updated) throw new HttpError(404, 'Idea not found');
+    }
+
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    if (!row) throw new HttpError(404, 'Idea not found');
+    res.json(serializeIdea(row));
+  }),
+);
+
+/**
+ * Deleting an idea cascades to its brief (and that brief's shots). The UI says
+ * so in the confirm, which is why the response reports whether one went with it.
+ */
+ideas.delete(
+  '/:id',
+  h(async (req, res) => {
+    const id = idParam(req);
+    const brief = await one<{ id: number }>('SELECT id FROM briefs WHERE idea_id = $1', [id]);
+    // Screenshots are not cascaded by the database; clear them before the rows go.
+    await removeImagesForIdea(id);
+    const deleted = await one<{ id: number }>('DELETE FROM ideas WHERE id = $1 RETURNING id', [id]);
+    if (!deleted) throw new HttpError(404, 'Idea not found');
+    res.json({ ok: true, deletedBriefId: brief?.id ?? null });
+  }),
+);
