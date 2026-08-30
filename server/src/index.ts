@@ -29,14 +29,27 @@ app.use(express.json({ limit: '1mb' }));
  * process that booted with an unreachable or unmigrated database is not
  * healthy — it just fails on the first click instead of at deploy time.
  */
+/**
+ * Which commit is actually running. Hosts inject this; without it there is no
+ * way to tell a deployed version from the outside, which turns "did my push go
+ * out?" into dashboard archaeology.
+ */
+const COMMIT = (
+  process.env.RAILWAY_GIT_COMMIT_SHA ??
+  process.env.RENDER_GIT_COMMIT ??
+  process.env.GIT_COMMIT ??
+  'unknown'
+).slice(0, 7);
+
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1 FROM ideas LIMIT 1');
-    res.json({ ok: true });
+    res.json({ ok: true, commit: COMMIT });
   } catch (err) {
     const code = (err as { code?: string }).code;
     res.status(503).json({
       ok: false,
+      commit: COMMIT,
       error: code === '42P01' ? 'database has no tables — migrations have not run' : 'database unreachable',
     });
   }
