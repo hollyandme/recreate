@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Shot, Stroke } from '../lib/api';
+import { prepareImage } from '../lib/image';
 
 /**
  * A shot's screenshot slot, its annotation layer, and the draw overlay.
@@ -39,7 +40,9 @@ export function ShotFrame({ shot, drawing, onUpload, onClearImage, onCommitStrok
   // sent, and the server decides from the actual bytes. A rejection then comes
   // back as a message the user can act on, rather than as nothing happening.
   const takeFile = (file: File | undefined) => {
-    if (file) onUpload(file);
+    // Oversized screenshots are shrunk first; prepareImage returns the original
+    // untouched when it is already small enough or cannot be decoded here.
+    if (file) void prepareImage(file).then(onUpload);
   };
 
   // Strokes commit on pointer-up; until then the in-progress one is drawn on top.

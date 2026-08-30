@@ -90,7 +90,16 @@ and are pattern-checked before touching any filesystem or bucket call.
 
 ## Screenshots
 
-Accepted: PNG, JPEG, GIF, WebP, AVIF, up to 12 MB.
+Accepted: PNG, JPEG, GIF, WebP, AVIF, up to 25 MB.
+
+Anything over 2 MB is downscaled in the browser before upload — 1600px on the long
+edge, re-encoded as JPEG. A full-screen Retina PNG is routinely 15-25 MB while the slot
+renders it at 168x296 and the print sheet at 180x318, so this loses nothing visible
+(~750dpi in the print box) and cuts a typical screenshot by about 95%. The original is
+kept if re-encoding would not actually be smaller, or if the browser cannot decode it.
+
+The 25 MB server limit is a backstop, and exceeding it says so rather than returning a
+bare "Internal error".
 
 The format is decided by **reading the file's leading bytes**, not by the type the
 browser reports. That type is guesswork from the file extension and is routinely empty

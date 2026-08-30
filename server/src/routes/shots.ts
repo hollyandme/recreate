@@ -60,9 +60,12 @@ shots.delete(
   }),
 );
 
+/** Generous: the client shrinks anything large, so this is a backstop. */
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 12 * 1024 * 1024, files: 1 },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   // No fileFilter: the browser's declared type is unreliable — routinely empty
   // for a perfectly good PNG — so the bytes are inspected after upload instead.
 });

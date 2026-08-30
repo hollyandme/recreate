@@ -33,6 +33,14 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(400).json({ error: 'Invalid request body', issues: err.issues });
     return;
   }
+  // Multer reports an oversized upload this way; unhandled it surfaced as a
+  // bare "Internal error", which told the user nothing about a file that was
+  // simply too big.
+  if (typeof err === 'object' && err !== null && (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({ error: 'That image is too large. Keep screenshots under 25 MB.' });
+    return;
+  }
+
   console.error(err);
 
   // 42P01 = undefined_table. This means the database is reachable but has never
