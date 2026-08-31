@@ -1,5 +1,4 @@
 import './lib/env.js';
-import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -7,6 +6,7 @@ import cors from 'cors';
 
 import { pool } from './lib/db.js';
 import { errorHandler } from './lib/http.js';
+import { applyMigrations, listShipped } from './lib/migrations.js';
 import { tags } from './routes/tags.js';
 import { ideas } from './routes/ideas.js';
 import { briefs } from './routes/briefs.js';
@@ -43,9 +43,7 @@ const COMMIT = (
 ).slice(0, 7);
 
 /** Migrations this build ships with; compared against what the database has. */
-const SHIPPED_MIGRATIONS = readdirSync(
-  path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../migrations'),
-).filter((f) => f.endsWith('.sql'));
+const SHIPPED_MIGRATIONS = await listShipped();
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -99,6 +97,20 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(errorHandler);
+
+// Migrate before accepting traffic. If this fails the process exits rather than
+// serving against a schema it does not match — a failed deploy with a real
+// reason in the logs beats an app that boots and then errors on every request.
+if (process.env.AUTO_MIGRATE !== 'false') {
+  try {
+    const applied = await applyMigrations();
+    if (applied.length) console.log(`Applied ${applied.length} migration(s) at startup.`);
+  } catch (err) {
+    console.error('Migration failed at startup — refusing to serve.');
+    console.error(err);
+    process.exit(1);
+  }
+}
 
 app.listen(PORT, () => {
   console.log(`Recreate API listening on http://localhost:${PORT}`);

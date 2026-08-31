@@ -13,10 +13,10 @@ services:
     # typescript and vite, which live there. Without this the build fails on
     # `tsc: not found`.
     buildCommand: npm install --include=dev && npm run build
-    # Migrations run before the new version takes traffic. preDeployCommand is a
-    # paid-plan feature; on the free tier, drop this line and run
-    # `npm run migrate:prod` once from the service Shell after the first deploy.
-    preDeployCommand: npm run migrate:prod
+    # No pre-deploy migration step: the server migrates itself at startup, so a
+    # deploy cannot begin serving against a schema it does not match. Release
+    # hooks are plan-gated on some hosts and fail silently when absent, which is
+    # exactly the failure this avoids.
     startCommand: npm start
     healthCheckPath: /api/health
     # Screenshots live here. The container filesystem is wiped on every deploy;

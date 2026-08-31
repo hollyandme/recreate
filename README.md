@@ -233,9 +233,19 @@ step did not run.
 runtime, but hosts apply it at build time too, and npm then omits devDependencies —
 where `typescript` and `vite` live. Without the flag the build dies on `tsc: not found`.
 
-Run migrations as a release/pre-deploy step — **`npm run migrate:prod`**, not
-`npm run migrate`. The latter needs `tsx`, a devDependency that production installs
-prune. `migrate:prod` runs the compiled `dist/migrate.js` and is idempotent.
+**Migrations run automatically at startup**, before the server accepts traffic. No
+release hook is required, and none should be relied on: a hook that silently does not
+fire leaves the code ahead of its schema, and the app then fails on every request to the
+affected route — including failing fast enough that opening a shell to fix it by hand is
+awkward. Migrating in-process makes a deploy self-contained.
+
+If a migration fails, the process exits rather than serving against a schema it does not
+match. A concurrent boot is safe: an advisory lock means one instance migrates and the
+others wait, then find nothing to do.
+
+`npm run migrate:prod` still exists for running migrations deliberately — against a
+restored backup, or to see what is pending without starting the app. Set
+`AUTO_MIGRATE=false` to turn off the startup behaviour if you ever want that control.
 
 Required environment:
 
