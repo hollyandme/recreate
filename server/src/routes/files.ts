@@ -11,6 +11,9 @@ const TYPE_BY_EXT: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.avif': 'image/avif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
 };
 
 /**
@@ -29,7 +32,7 @@ files.get(
     res.setHeader('Content-Type', TYPE_BY_EXT[ext] ?? 'application/octet-stream');
 
     try {
-      await storage.serve(key, res);
+      await storage.serve(key, req, res);
     } catch {
       throw new HttpError(404, 'Not found');
     }

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, type Idea, type Platform, type Status } from '../lib/api';
 import { embedHeight, embedUrl, platformIcon, savedLabel } from '../lib/embed';
 import { useLibrary } from '../lib/store';
+import { DOWNLOADER_BY_PLATFORM, openDownloader } from '../lib/download';
 import { AutoTextarea } from '../components/AutoField';
 
 type PlatformFilter = 'All' | Platform;
@@ -313,12 +314,14 @@ function IdeaCard({
   const lib = useLibrary();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftTag, setDraftTag] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const guard = (fn: () => Promise<unknown>) => {
     fn().catch((err) => onProblem(err instanceof Error ? err.message : 'Something went wrong'));
   };
 
   const embed = embedUrl(idea.url);
+  const downloader = DOWNLOADER_BY_PLATFORM[idea.platform];
   const addable = lib.tags.filter((t) => t.id !== idea.tagId);
 
   const assignTag = (tagId: number | null) => {
@@ -484,6 +487,20 @@ function IdeaCard({
           <i className="ph ph-list-numbers" />
           <span>Brief</span>
         </span>
+        {downloader && (
+          <span
+            className="pill"
+            title={`Copy this link and open ${downloader.name} to download the video`}
+            onClick={async () => {
+              const ok = await openDownloader(idea.url, downloader);
+              setCopied(ok);
+              window.setTimeout(() => setCopied(false), 2500);
+            }}
+          >
+            <i className={idea.videoUrl ? 'ph-fill ph-check-circle' : 'ph ph-download-simple'} />
+            <span>{copied ? 'Link copied' : 'Get video'}</span>
+          </span>
+        )}
         <button className="icon-quiet" title="Remove" style={{ marginLeft: 'auto' }} onClick={remove}>
           <i className="ph ph-trash" />
         </button>

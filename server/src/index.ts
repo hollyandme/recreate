@@ -1,4 +1,5 @@
 import './lib/env.js';
+import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -41,16 +42,42 @@ const COMMIT = (
   'unknown'
 ).slice(0, 7);
 
+/** Migrations this build ships with; compared against what the database has. */
+const SHIPPED_MIGRATIONS = readdirSync(
+  path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../migrations'),
+).filter((f) => f.endsWith('.sql'));
+
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1 FROM ideas LIMIT 1');
+
+    // Code shipping ahead of its schema is the dangerous case: the tables exist,
+    // so the app boots and looks fine, then every query touching a new column
+    // fails. Comparing shipped migrations against applied ones catches it at
+    // deploy time instead of on the user's first click.
+    const applied = await pool.query<{ name: string }>('SELECT name FROM schema_migrations');
+    const have = new Set(applied.rows.map((r) => r.name));
+    const pending = SHIPPED_MIGRATIONS.filter((m) => !have.has(m));
+
+    if (pending.length) {
+      res.status(503).json({
+        ok: false,
+        commit: COMMIT,
+        error: `migrations pending: ${pending.join(', ')} — run npm run migrate:prod`,
+      });
+      return;
+    }
+
     res.json({ ok: true, commit: COMMIT });
   } catch (err) {
     const code = (err as { code?: string }).code;
     res.status(503).json({
       ok: false,
       commit: COMMIT,
-      error: code === '42P01' ? 'database has no tables — migrations have not run' : 'database unreachable',
+      error:
+        code === '42P01'
+          ? 'database has no tables — migrations have not run'
+          : 'database unreachable',
     });
   }
 });

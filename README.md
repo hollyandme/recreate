@@ -112,6 +112,37 @@ browsers will not render it and accepting it would store an invisible screenshot
 Nothing is ever dropped without saying so: a rejected file produces a message in the UI,
 never a silent no-op.
 
+## Reference video
+
+An idea can carry a video, stored like screenshots (object key in `ideas.video_key`,
+bytes in storage). In a brief it appears as a player: scrub to a moment, **Add shot from
+this frame**, and the frame becomes a shot with its **timestamp filled in automatically**.
+`Grab` on an existing shot fills that one instead.
+
+Frames are taken in the browser — `drawImage` onto a canvas, exported as JPEG, then run
+through the same upload path as any screenshot. This only works because the video is
+served same-origin from `/api/files`; a cross-origin video would taint the canvas and
+make grabbing impossible.
+
+The local-storage driver answers **HTTP Range** requests (206, including open-ended and
+suffix ranges). Seeking depends on it — without Range a browser cannot scrub. S3
+answers Range itself, so the redirect carries it.
+
+Container type is sniffed from the bytes like images are. Note this identifies the
+container, not the codec: a `.mov` holding HEVC looks identical to one holding H.264 and
+only the latter plays in Chrome, so the player reports a decode failure in the UI rather
+than pretending to catch it on upload.
+
+**Storage adds up.** A 60s phone video is 60-150 MB against a 5 GB volume — roughly
+40-80 videos. Move to object storage before that bites.
+
+### Getting the video
+
+Neither platform lets you fetch the file from a post URL, and there is no API for it. The
+card's **Get video** button (TikTok) copies the link and opens an external downloader in a
+new tab; you download there and attach the file. It deliberately does not deep-link with a
+query parameter, so it does not break when that site changes its URL scheme.
+
 ## Annotations
 
 A stroke is a list of `[x, y]` points in a **normalised 0–100 space** relative to the

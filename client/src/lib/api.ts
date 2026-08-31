@@ -20,6 +20,8 @@ export interface Idea {
   status: Status;
   savedAt: string;
   briefId: number | null;
+  videoKey: string | null;
+  videoUrl: string | null;
 }
 
 /** A stroke is a list of [x, y] points in a normalised 0-100 space. */
@@ -52,6 +54,7 @@ export interface Brief {
     tag: string;
     hook: string;
     body: string;
+    videoUrl: string | null;
   };
   shots: Shot[];
 }
@@ -90,6 +93,12 @@ export const api = {
   ) => request<Idea>(`/ideas/${id}`, { method: 'PATCH', body: body(patch) }),
   deleteIdea: (id: number) =>
     request<{ deletedBriefId: number | null }>(`/ideas/${id}`, { method: 'DELETE' }),
+  uploadIdeaVideo: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<Idea>(`/ideas/${id}/video`, { method: 'POST', body: form });
+  },
+  clearIdeaVideo: (id: number) => request<Idea>(`/ideas/${id}/video`, { method: 'DELETE' }),
 
   listBriefs: () => request<Brief[]>('/briefs'),
   getBrief: (id: number) => request<Brief>(`/briefs/${id}`),

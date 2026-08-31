@@ -891,3 +891,54 @@ textarea.input {
   .seg-opt:has(input:checked), .seg-opt::before { animation: none; }
   .btn:active, .seg-opt:active { transform: none; }
 }
+
+/* ── Reference video ─────────────────────────────────────────────────────────
+   Stored against the idea and served same-origin, which is what allows a frame
+   to be drawn to a canvas and exported as a shot. */
+.video-ref {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--inset-fill);
+  border: 1px solid var(--glass-border);
+}
+.video-ref-head { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.video-ref-note { font-size: 12px; color: var(--muted); margin-right: auto; }
+.video-ref-body { display: flex; flex-direction: column; gap: var(--s3); }
+
+.video-ref-player {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 10px;
+  background: #000;
+  border: 1px solid var(--field-border);
+}
+
+.video-ref-actions { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.video-ref-hint { font-size: 11px; color: var(--faint); }
+
+.video-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: var(--s8);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  transition: background 200ms var(--ease), border-color 200ms var(--ease), color 200ms var(--ease);
+}
+.video-drop i { font-size: 17px; }
+.video-drop:hover { border-color: var(--warm-border); color: var(--accent-300); }
+.video-drop.is-over {
+  background: var(--warm-tint);
+  border-color: var(--warm-border);
+  border-style: solid;
+  color: var(--accent-chip);
+}
+.video-drop.is-busy { cursor: progress; color: var(--accent-300); }

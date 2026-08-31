@@ -47,6 +47,15 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   // been migrated — overwhelmingly the state of a fresh deploy whose release
   // step did not run. Saying so is worth far more than "Internal error", and it
   // leaks nothing: it is an operational fact, not data.
+  // 42703 = undefined_column: the code is ahead of the schema, i.e. a deploy
+  // whose migration step did not run. Same operational fix as a missing table.
+  if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '42703') {
+    res.status(503).json({
+      error: 'The database is missing a column this version needs — run the migrations (npm run migrate:prod).',
+    });
+    return;
+  }
+
   if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '42P01') {
     res.status(503).json({
       error: 'The database has no tables yet — run the migrations (npm run migrate:prod).',

@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { query, one } from '../lib/db.js';
 import { h, idParam, HttpError } from '../lib/http.js';
 import { detectPlatform, detectSource } from '../lib/links.js';
-import { removeImagesForIdea } from '../lib/cleanup.js';
+import { removeImagesForIdea, removeVideoForIdea } from '../lib/cleanup.js';
+import { newVideoKey, storage } from '../lib/storage.js';
+import { sniffVideoType } from '../lib/sniff.js';
+import multer from 'multer';
 
 export const ideas = Router();
 
@@ -19,6 +22,7 @@ export interface IdeaRow {
   tag_name: string | null;
   status: string;
   saved_at: Date;
+  video_key: string | null;
   has_brief: boolean;
   brief_id: number | null;
 }
@@ -37,6 +41,8 @@ export function serializeIdea(r: IdeaRow) {
     status: r.status,
     savedAt: r.saved_at.toISOString(),
     briefId: r.brief_id,
+    videoKey: r.video_key,
+    videoUrl: r.video_key ? `/api/files/${r.video_key}` : null,
   };
 }
 
@@ -159,10 +165,69 @@ ideas.delete(
   h(async (req, res) => {
     const id = idParam(req);
     const brief = await one<{ id: number }>('SELECT id FROM briefs WHERE idea_id = $1', [id]);
-    // Screenshots are not cascaded by the database; clear them before the rows go.
+    // Neither screenshots nor the video are cascaded by the database.
     await removeImagesForIdea(id);
+    await removeVideoForIdea(id);
     const deleted = await one<{ id: number }>('DELETE FROM ideas WHERE id = $1 RETURNING id', [id]);
     if (!deleted) throw new HttpError(404, 'Idea not found');
     res.json({ ok: true, deletedBriefId: brief?.id ?? null });
+  }),
+);
+
+/** Generous, because video is inherently large; the UI warns before uploading. */
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_VIDEO_BYTES, files: 1 },
+});
+
+/**
+ * Attach a reference video to an idea. Stored once and served to everyone
+ * opening its brief, so a teammate can scrub and grab their own frames.
+ */
+ideas.post(
+  '/:id/video',
+  uploadVideo.single('file'),
+  h(async (req, res) => {
+    const id = idParam(req);
+    const file = req.file;
+    if (!file) throw new HttpError(400, 'Expected a video file under "file"');
+
+    const sniffed = sniffVideoType(file.buffer);
+    if (!sniffed) throw new HttpError(415, 'That file is not an MP4, WebM or QuickTime video.');
+
+    const existing = await one<{ video_key: string | null }>(
+      'SELECT video_key FROM ideas WHERE id = $1',
+      [id],
+    );
+    if (!existing) throw new HttpError(404, 'Idea not found');
+
+    const key = newVideoKey(sniffed);
+    await storage.put(key, file.buffer, sniffed);
+    await query('UPDATE ideas SET video_key = $2 WHERE id = $1', [id, key]);
+
+    // Drop the previous video only once the row points at the new one.
+    if (existing.video_key) {
+      storage.remove(existing.video_key).catch((err) => console.error('storage delete failed', err));
+    }
+
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    res.status(201).json(serializeIdea(row!));
+  }),
+);
+
+ideas.delete(
+  '/:id/video',
+  h(async (req, res) => {
+    const id = idParam(req);
+    await removeVideoForIdea(id);
+    const updated = await one<{ id: number }>(
+      'UPDATE ideas SET video_key = NULL WHERE id = $1 RETURNING id',
+      [id],
+    );
+    if (!updated) throw new HttpError(404, 'Idea not found');
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    res.json(serializeIdea(row!));
   }),
 );

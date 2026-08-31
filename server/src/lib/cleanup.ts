@@ -42,3 +42,11 @@ export async function removeImageForShot(shotId: number): Promise<void> {
   );
   await removeKeys(rows.map((r) => r.image_key));
 }
+
+export async function removeVideoForIdea(ideaId: number): Promise<void> {
+  const rows = await query<{ video_key: string | null }>(
+    'SELECT video_key FROM ideas WHERE id = $1',
+    [ideaId],
+  );
+  await removeKeys(rows.map((r) => r.video_key));
+}

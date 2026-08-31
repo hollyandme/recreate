@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { api, type Brief, type Shot, type Stroke } from '../lib/api';
@@ -6,6 +6,8 @@ import { platformIcon } from '../lib/embed';
 import { useLibrary } from '../lib/store';
 import { AutoInput, AutoTextarea } from '../components/AutoField';
 import { ShotFrame } from '../components/ShotFrame';
+import { VideoScrubber } from '../components/VideoScrubber';
+import { grabFrame } from '../lib/frame';
 
 export function BriefsScreen() {
   const { id } = useParams();
@@ -16,6 +18,9 @@ export function BriefsScreen() {
   const [brief, setBrief] = useState<Brief | null>(null);
   const [drawShot, setDrawShot] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const guard = useCallback((fn: () => Promise<unknown>) => {
     fn().catch((err) => setProblem(err instanceof Error ? err.message : 'Something went wrong'));
@@ -54,6 +59,46 @@ export function BriefsScreen() {
 
   const replaceShot = (updated: Shot) =>
     setBrief((b) => (b ? { ...b, shots: b.shots.map((s) => (s.id === updated.id ? updated : s)) } : b));
+
+  /** Grab the frame on screen and append it as a new shot, timestamp filled in. */
+  const addShotFromFrame = () =>
+    guard(async () => {
+      const video = videoRef.current;
+      if (!video || !brief) return;
+      const grabbed = await grabFrame(video);
+      if (!grabbed) {
+        setProblem('Could not read that frame — let the video load, then try again.');
+        return;
+      }
+      setGrabbing(true);
+      try {
+        const shot = await api.addShot(brief.id);
+        const withImage = await api.uploadShotImage(shot.id, grabbed.file);
+        const withTs = await api.updateShot(shot.id, { timestamp: grabbed.label });
+        setBrief((b) => (b ? { ...b, shots: [...b.shots, { ...withImage, ...withTs }] } : b));
+      } finally {
+        setGrabbing(false);
+      }
+    });
+
+  /** Same, but fills a shot that already exists rather than adding one. */
+  const fillShotFromFrame = (shotId: number) =>
+    guard(async () => {
+      const video = videoRef.current;
+      if (!video) return;
+      const grabbed = await grabFrame(video);
+      if (!grabbed) {
+        setProblem('Could not read that frame — let the video load, then try again.');
+        return;
+      }
+      const withImage = await api.uploadShotImage(shotId, grabbed.file);
+      const withTs = await api.updateShot(shotId, { timestamp: grabbed.label });
+      setBrief((b) =>
+        b
+          ? { ...b, shots: b.shots.map((x) => (x.id === shotId ? { ...withImage, ...withTs } : x)) }
+          : b,
+      );
+    });
 
   const pickIdea = (ideaId: number, existing: number | null) =>
     guard(async () => {
@@ -220,6 +265,35 @@ export function BriefsScreen() {
             />
           </div>
 
+          <VideoScrubber
+            ref={videoRef}
+            videoUrl={brief.reference.videoUrl}
+            uploading={uploadingVideo}
+            grabbing={grabbing}
+            hasShots={brief.shots.length > 0}
+            onGrab={addShotFromFrame}
+            onUpload={(file) =>
+              guard(async () => {
+                setUploadingVideo(true);
+                try {
+                  await api.uploadIdeaVideo(brief.ideaId, file);
+                  setBrief(await api.getBrief(brief.id));
+                  await lib.refresh();
+                } finally {
+                  setUploadingVideo(false);
+                }
+              })
+            }
+            onRemove={() =>
+              guard(async () => {
+                if (!window.confirm('Remove the reference video? Shots already grabbed stay.')) return;
+                await api.clearIdeaVideo(brief.ideaId);
+                setBrief(await api.getBrief(brief.id));
+                await lib.refresh();
+              })
+            }
+          />
+
           <div className="shot-list">
             {brief.shots.map((shot, i) => (
               <div className="brief-shot" key={shot.id}>
@@ -242,7 +316,15 @@ export function BriefsScreen() {
                       onSave={(v) => patchShot(shot.id, { timestamp: v })}
                     />
                     <span
-                      className={`pill pill-sm push no-print${drawShot === shot.id ? ' is-on' : ''}`}
+                      className="pill pill-sm push no-print"
+                      title="Replace this shot with the current video frame"
+                      onClick={() => fillShotFromFrame(shot.id)}
+                    >
+                      <i className="ph ph-crop" />
+                      <span>Grab</span>
+                    </span>
+                    <span
+                      className={`pill pill-sm no-print${drawShot === shot.id ? ' is-on' : ''}`}
                       title="Draw on this frame"
                       onClick={() => setDrawShot((cur) => (cur === shot.id ? null : shot.id))}
                     >

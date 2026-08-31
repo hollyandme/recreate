@@ -21,6 +21,7 @@ interface BriefRow {
   ref_tag: string | null;
   ref_hook: string;
   ref_body: string;
+  ref_video_key: string | null;
 }
 
 interface ShotRow {
@@ -67,6 +68,7 @@ function serializeBrief(r: BriefRow, shots: ShotRow[]) {
       tag: r.ref_tag ?? 'untagged',
       hook: r.ref_hook || 'No hook comment yet',
       body: r.ref_body || 'No body comment yet',
+      videoUrl: r.ref_video_key ? `/api/files/${r.ref_video_key}` : null,
     },
     shots: shots.map(serializeShot),
   };
@@ -80,6 +82,7 @@ const SELECT_BRIEF = `
          i.status        AS ref_status,
          i.hook          AS ref_hook,
          i.body          AS ref_body,
+         i.video_key     AS ref_video_key,
          t.name          AS ref_tag
     FROM briefs b
     JOIN ideas i ON i.id = b.idea_id

@@ -2,14 +2,19 @@ import { createReadStream } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { REPO_ROOT } from './env.js';
 
 export interface Storage {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   remove(key: string): Promise<void>;
-  /** Write the object to an Express response — streamed on disk, redirected on S3. */
-  serve(key: string, res: Response): Promise<void>;
+  /**
+   * Write the object to an Express response — streamed on disk, redirected on
+   * S3. The request is passed in because video seeking depends on Range: a
+   * browser scrubbing a video asks for byte ranges, and answering the whole
+   * file every time makes seeking crawl or fail outright.
+   */
+  serve(key: string, req: Request, res: Response): Promise<void>;
 }
 
 const EXT_BY_TYPE: Record<string, string> = {
@@ -18,6 +23,9 @@ const EXT_BY_TYPE: Record<string, string> = {
   'image/webp': '.webp',
   'image/gif': '.gif',
   'image/avif': '.avif',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
 };
 
 export const ALLOWED_IMAGE_TYPES = Object.keys(EXT_BY_TYPE);
@@ -27,8 +35,12 @@ export function newImageKey(contentType: string): string {
   return `shots/${randomUUID()}${EXT_BY_TYPE[contentType] ?? '.bin'}`;
 }
 
-/** Keys we minted look like `shots/<uuid><ext>`; refuse anything else. */
-const KEY_RE = /^shots\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/i;
+export function newVideoKey(contentType: string): string {
+  return `videos/${randomUUID()}${EXT_BY_TYPE[contentType] ?? '.bin'}`;
+}
+
+/** Keys we minted look like `<folder>/<uuid><ext>`; refuse anything else. */
+const KEY_RE = /^(shots|videos)\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/i;
 
 export function isValidKey(key: string): boolean {
   return KEY_RE.test(key);
@@ -57,11 +69,36 @@ class LocalStorage implements Storage {
     await rm(this.resolve(key), { force: true });
   }
 
-  async serve(key: string, res: Response): Promise<void> {
+  async serve(key: string, req: Request, res: Response): Promise<void> {
     const full = this.resolve(key);
     const info = await stat(full);
-    res.setHeader('Content-Length', info.size);
     res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    const range = req.headers.range;
+    const match = range ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null;
+
+    if (match) {
+      const startRaw = match[1];
+      const endRaw = match[2];
+      // "bytes=-500" means the last 500 bytes, not "from 0 to 500".
+      const start = startRaw ? Number(startRaw) : Math.max(0, info.size - Number(endRaw || 0));
+      const end = startRaw ? (endRaw ? Math.min(Number(endRaw), info.size - 1) : info.size - 1) : info.size - 1;
+
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= info.size) {
+        res.status(416).setHeader('Content-Range', `bytes */${info.size}`);
+        res.end();
+        return;
+      }
+
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${info.size}`);
+      res.setHeader('Content-Length', end - start + 1);
+      createReadStream(full, { start, end }).pipe(res);
+      return;
+    }
+
+    res.setHeader('Content-Length', info.size);
     createReadStream(full).pipe(res);
   }
 }
@@ -97,7 +134,8 @@ class S3Storage implements Storage {
     await client.send(new mod.DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
-  async serve(key: string, res: Response): Promise<void> {
+  async serve(key: string, _req: Request, res: Response): Promise<void> {
+    // S3 answers Range requests itself, so the redirect carries seeking with it.
     const { mod, client } = await this.sdk();
     const signer = await import('@aws-sdk/s3-request-presigner');
     const url = await signer.getSignedUrl(

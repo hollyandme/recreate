@@ -14,6 +14,8 @@ export type SniffedType =
   | 'image/avif'
   | 'image/heic';
 
+export type SniffedVideo = 'video/mp4' | 'video/webm' | 'video/quicktime';
+
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 function startsWith(buf: Buffer, bytes: number[], offset = 0): boolean {
@@ -38,6 +40,32 @@ export function sniffImageType(buf: Buffer): SniffedType | null {
     // HEIC is recognised so it can be refused with a useful message: browsers
     // will not render it, so accepting it would store an invisible screenshot.
     if (['heic', 'heix', 'hevc', 'heim', 'heis', 'mif1', 'msf1'].includes(brand)) return 'image/heic';
+  }
+
+  return null;
+}
+
+/**
+ * Same idea for video: the container is identifiable from its header, and the
+ * browser's declared type is no more trustworthy here than it was for images.
+ *
+ * Note this identifies the *container*, not the codec inside it. A .mov holding
+ * HEVC looks identical to one holding H.264 at this level, and only the former
+ * will refuse to play in Chrome — which is why the player reports a decode
+ * failure in the UI rather than us pretending to catch it here.
+ */
+export function sniffVideoType(buf: Buffer): SniffedVideo | null {
+  // Matroska/WebM: EBML magic.
+  if (startsWith(buf, [0x1a, 0x45, 0xdf, 0xa3])) return 'video/webm';
+
+  // ISO-BMFF: bytes 4-7 "ftyp", brand at 8-11.
+  if (buf.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const brand = buf.subarray(8, 12).toString('latin1');
+    if (brand === 'qt  ') return 'video/quicktime';
+    // isom/mp42/avc1/iso2/mmp4 and friends are all MP4 as far as a browser cares.
+    if (/^(isom|iso2|iso4|iso5|mp41|mp42|avc1|mmp4|dash|M4V |m4v )$/.test(brand)) return 'video/mp4';
+    // Unknown brand in an ISO container: MP4 is the safe assumption.
+    return 'video/mp4';
   }
 
   return null;
