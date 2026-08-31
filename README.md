@@ -139,9 +139,11 @@ than pretending to catch it on upload.
 ### Getting the video
 
 Neither platform lets you fetch the file from a post URL, and there is no API for it. The
-card's **Get video** button (TikTok) copies the link and opens an external downloader in a
-new tab; you download there and attach the file. It deliberately does not deep-link with a
-query parameter, so it does not break when that site changes its URL scheme.
+card's **Get video** button copies the link and opens an external downloader in a new tab —
+ssstik.io for TikTok, snapinsta.to for Instagram; you download there and attach the file.
+Cards with a plain `Link` platform show no button, since neither site takes an arbitrary
+URL. It deliberately does not deep-link with a query parameter, so it does not break when
+either site changes its URL scheme.
 
 ## Annotations
 
