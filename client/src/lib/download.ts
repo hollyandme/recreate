@@ -10,6 +10,9 @@
  */
 export const DOWNLOADER_BY_PLATFORM: Record<string, { name: string; url: string } | undefined> = {
   TikTok: { name: 'ssstik.io', url: 'https://ssstik.io/' },
+  Instagram: { name: 'snapinsta.to', url: 'https://snapinsta.to/en46' },
+  // 'Link' has no entry on purpose: an arbitrary URL is not something either
+  // downloader handles, so the button simply does not appear on those cards.
 };
 
 export async function openDownloader(postUrl: string, site: { url: string }): Promise<boolean> {
