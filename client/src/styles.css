@@ -112,6 +112,11 @@ img { display: block; max-width: 100%; }
   height: 100vh;
 }
 
+/* Embed mode: no own sidebar, main fills the frame. */
+.shell.is-embed {
+  grid-template-columns: 1fr;
+}
+
 .main {
   overflow-y: auto;
   padding: var(--s10) var(--s10) 56px;
