@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, type Idea, type Platform, type Status } from '../lib/api';
@@ -26,6 +26,17 @@ export function IdeasScreen() {
 
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Close the "Add format" popup on Escape.
+  useEffect(() => {
+    if (!addOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAddOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [addOpen]);
 
   const guard = async (fn: () => Promise<unknown>) => {
     try {
@@ -81,6 +92,7 @@ export function IdeasScreen() {
         setNewUrl('');
         setNewNote('');
         setNewTagSel(null);
+        setAddOpen(false);
       } finally {
         setSaving(false);
       }
@@ -128,6 +140,10 @@ export function IdeasScreen() {
           </div>
           <h1 className="page-title">A library of ideas worth stealing</h1>
         </div>
+        <button className="btn btn-accent" onClick={() => setAddOpen(true)}>
+          <i className="ph ph-plus" />
+          <span>Add format</span>
+        </button>
       </header>
 
       {(problem ?? lib.error) && (
@@ -137,83 +153,103 @@ export function IdeasScreen() {
         </div>
       )}
 
-      <section className="glass panel">
-        <div className="panel-head">
-          <h2>Save a link</h2>
-          <span>Paste an Instagram or TikTok URL and say what caught your eye</span>
-        </div>
+      {addOpen && (
+        <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
+          <section
+            className="glass panel modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add a format"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div className="panel-head" style={{ flex: 1 }}>
+                <h2>Save a link</h2>
+                <span>Paste an Instagram or TikTok URL and say what caught your eye</span>
+              </div>
+              <button className="icon-quiet is-bordered" title="Close" onClick={() => setAddOpen(false)}>
+                <i className="ph ph-x" />
+              </button>
+            </div>
 
-        <div className="row">
-          <input
-            className="input input-pill"
-            style={{ flex: '1 1 300px', minWidth: 0 }}
-            placeholder="https://www.tiktok.com/@handle/video/…"
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void saveIdea();
-            }}
-          />
-          <input
-            className="input input-pill"
-            style={{ flex: '1 1 240px', minWidth: 0 }}
-            placeholder="What is the format doing?"
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void saveIdea();
-            }}
-          />
-          <button className="btn btn-accent" onClick={() => void saveIdea()} disabled={saving || !newUrl.trim()}>
-            <i className="ph ph-bookmark-simple" />
-            <span>Save</span>
-          </button>
-        </div>
-
-        <div className="divider-top">
-          <span className="label-xs">Tag for this idea · × deletes a tag from the library</span>
-          <div className="row-tight">
-            {lib.tags.map((t) => {
-              const on = newTagSel === t.id;
-              return (
-                <span key={t.id} className={`chip chip-split${on ? ' is-on' : ''}`}>
-                  <span className="chip-body" onClick={() => setNewTagSel(on ? null : t.id)}>
-                    <i className={on ? 'ph-fill ph-check-circle' : 'ph ph-tag'} />
-                    <span>{t.name}</span>
-                  </span>
-                  <span
-                    className="icon-x"
-                    title={
-                      t.ideaCount > 0
-                        ? `Delete this tag everywhere (on ${t.ideaCount} ${t.ideaCount === 1 ? 'idea' : 'ideas'})`
-                        : 'Delete this tag'
-                    }
-                    onClick={() => void destroyTag(t.id, t.name)}
-                  >
-                    <i className="ph ph-x" />
-                  </span>
-                </span>
-              );
-            })}
-
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--s2)', marginLeft: 2 }}>
+            <div className="row">
               <input
-                className="input input-pill-sm"
-                style={{ width: 148 }}
-                placeholder="Create a tag"
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
+                className="input input-pill"
+                style={{ flex: '1 1 300px', minWidth: 0 }}
+                placeholder="https://www.tiktok.com/@handle/video/…"
+                value={newUrl}
+                autoFocus
+                onChange={(e) => setNewUrl(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') void createTag();
+                  if (e.key === 'Enter') void saveIdea();
                 }}
               />
-              <span className="icon-round" title="Create tag" onClick={() => void createTag()}>
-                <i className="ph ph-plus" />
-              </span>
-            </span>
-          </div>
+              <input
+                className="input input-pill"
+                style={{ flex: '1 1 240px', minWidth: 0 }}
+                placeholder="What is the format doing?"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveIdea();
+                }}
+              />
+              <button
+                className="btn btn-accent"
+                onClick={() => void saveIdea()}
+                disabled={saving || !newUrl.trim()}
+              >
+                <i className="ph ph-bookmark-simple" />
+                <span>Save</span>
+              </button>
+            </div>
+
+            <div className="divider-top">
+              <span className="label-xs">Tag for this idea · × deletes a tag from the library</span>
+              <div className="row-tight">
+                {lib.tags.map((t) => {
+                  const on = newTagSel === t.id;
+                  return (
+                    <span key={t.id} className={`chip chip-split${on ? ' is-on' : ''}`}>
+                      <span className="chip-body" onClick={() => setNewTagSel(on ? null : t.id)}>
+                        <i className={on ? 'ph-fill ph-check-circle' : 'ph ph-tag'} />
+                        <span>{t.name}</span>
+                      </span>
+                      <span
+                        className="icon-x"
+                        title={
+                          t.ideaCount > 0
+                            ? `Delete this tag everywhere (on ${t.ideaCount} ${t.ideaCount === 1 ? 'idea' : 'ideas'})`
+                            : 'Delete this tag'
+                        }
+                        onClick={() => void destroyTag(t.id, t.name)}
+                      >
+                        <i className="ph ph-x" />
+                      </span>
+                    </span>
+                  );
+                })}
+
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--s2)', marginLeft: 2 }}>
+                  <input
+                    className="input input-pill-sm"
+                    style={{ width: 148 }}
+                    placeholder="Create a tag"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void createTag();
+                    }}
+                  />
+                  <span className="icon-round" title="Create tag" onClick={() => void createTag()}>
+                    <i className="ph ph-plus" />
+                  </span>
+                </span>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      )}
 
       <div className="row-tight">
         <Segmented
