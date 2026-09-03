@@ -302,7 +302,7 @@ export function IdeasScreen() {
           <i className="ph ph-bookmarks-simple" />
           <span>
             {lib.ideas.length === 0
-              ? 'Nothing saved yet. Paste a link above.'
+              ? 'Nothing saved yet. Hit “Add format” to save your first link.'
               : 'No saved idea matches these filters.'}
           </span>
         </div>
