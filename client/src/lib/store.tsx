@@ -16,7 +16,7 @@ interface Library {
   error: string | null;
   refresh: () => Promise<void>;
   replaceIdea: (idea: Idea) => void;
-  addIdea: (input: { url: string; note?: string; tagId?: number | null }) => Promise<void>;
+  addIdea: (input: { url: string; note?: string; tagIds?: number[] }) => Promise<void>;
   patchIdea: (id: number, patch: Parameters<typeof api.updateIdea>[1]) => Promise<void>;
   removeIdea: (id: number) => Promise<void>;
   createTag: (name: string) => Promise<Tag | null>;
@@ -73,7 +73,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       patchIdea: async (id, patch) => {
         const updated = await api.updateIdea(id, patch);
         replaceIdea(updated);
-        if ('tagId' in patch) setTags(await api.listTags());
+        if ('tagIds' in patch) setTags(await api.listTags());
       },
 
       removeIdea: async (id) => {

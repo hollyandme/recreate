@@ -73,9 +73,9 @@ async function main(): Promise<void> {
 
   // Oldest first, spaced a few days apart, so "saved" dates read plausibly.
   for (const [i, idea] of [...IDEAS].reverse().entries()) {
-    await query(
-      `INSERT INTO ideas (url, platform, source_handle, note, hook, body, tag_id, status, saved_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() - make_interval(days => $9))`,
+    const created = await one<{ id: number }>(
+      `INSERT INTO ideas (url, platform, source_handle, note, hook, body, status, saved_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now() - make_interval(days => $8)) RETURNING id`,
       [
         idea.url,
         detectPlatform(idea.url),
@@ -83,11 +83,17 @@ async function main(): Promise<void> {
         idea.note,
         idea.hook,
         idea.body,
-        tagIds.get(idea.tag) ?? null,
         idea.status,
         (IDEAS.length - 1 - i) * 4,
       ],
     );
+    const tagId = tagIds.get(idea.tag);
+    if (created && tagId) {
+      await query('INSERT INTO idea_tags (idea_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
+        created.id,
+        tagId,
+      ]);
+    }
   }
 
   console.log(`Seeded ${TAGS.length} tags and ${IDEAS.length} ideas.`);

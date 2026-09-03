@@ -17,7 +17,7 @@ export function IdeasScreen() {
 
   const [newUrl, setNewUrl] = useState('');
   const [newNote, setNewNote] = useState('');
-  const [newTagSel, setNewTagSel] = useState<number | null>(null);
+  const [newTagIds, setNewTagIds] = useState<number[]>([]);
   const [newTagName, setNewTagName] = useState('');
 
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('All');
@@ -60,24 +60,32 @@ export function IdeasScreen() {
   const rows = useMemo(
     () =>
       scoped.filter((x) =>
-        tagFilter === 'any' ? true : tagFilter === 'untagged' ? x.tagId === null : x.tagId === tagFilter,
+        tagFilter === 'any'
+          ? true
+          : tagFilter === 'untagged'
+            ? x.tagIds.length === 0
+            : x.tagIds.includes(tagFilter),
       ),
     [scoped, tagFilter],
   );
 
   // Only tags actually in use get a filter chip, plus "Untagged" if any idea is.
   const tagChips = useMemo(() => {
-    const inUse = lib.tags.filter((t) => lib.ideas.some((x) => x.tagId === t.id));
+    const inUse = lib.tags.filter((t) => lib.ideas.some((x) => x.tagIds.includes(t.id)));
     const chips: { key: TagFilter; label: string; count: number }[] = [
       { key: 'any', label: 'All', count: scoped.length },
       ...inUse.map((t) => ({
         key: t.id as TagFilter,
         label: t.name,
-        count: scoped.filter((x) => x.tagId === t.id).length,
+        count: scoped.filter((x) => x.tagIds.includes(t.id)).length,
       })),
     ];
-    if (lib.ideas.some((x) => x.tagId === null)) {
-      chips.push({ key: 'untagged', label: 'Untagged', count: scoped.filter((x) => x.tagId === null).length });
+    if (lib.ideas.some((x) => x.tagIds.length === 0)) {
+      chips.push({
+        key: 'untagged',
+        label: 'Untagged',
+        count: scoped.filter((x) => x.tagIds.length === 0).length,
+      });
     }
     return chips;
   }, [lib.tags, lib.ideas, scoped]);
@@ -88,10 +96,10 @@ export function IdeasScreen() {
       if (!url) return;
       setSaving(true);
       try {
-        await lib.addIdea({ url, note: newNote.trim(), tagId: newTagSel });
+        await lib.addIdea({ url, note: newNote.trim(), tagIds: newTagIds });
         setNewUrl('');
         setNewNote('');
-        setNewTagSel(null);
+        setNewTagIds([]);
         setAddOpen(false);
       } finally {
         setSaving(false);
@@ -103,12 +111,13 @@ export function IdeasScreen() {
       const tag = await lib.createTag(newTagName);
       if (!tag) return;
       setNewTagName('');
-      setNewTagSel(tag.id);
+      // Newly created tags are pre-selected for the idea being saved.
+      setNewTagIds((ids) => (ids.includes(tag.id) ? ids : [...ids, tag.id]));
     });
 
   const destroyTag = (id: number, name: string) =>
     guard(async () => {
-      const used = lib.ideas.filter((x) => x.tagId === id).length;
+      const used = lib.ideas.filter((x) => x.tagIds.includes(id)).length;
       if (
         used > 0 &&
         !window.confirm(
@@ -118,7 +127,7 @@ export function IdeasScreen() {
         return;
       }
       await lib.removeTag(id);
-      if (newTagSel === id) setNewTagSel(null);
+      setNewTagIds((ids) => ids.filter((x) => x !== id));
       if (tagFilter === id) setTagFilter('any');
     });
 
@@ -205,13 +214,20 @@ export function IdeasScreen() {
             </div>
 
             <div className="divider-top">
-              <span className="label-xs">Tag for this idea · × deletes a tag from the library</span>
+              <span className="label-xs">Tags for this idea · pick any number · × deletes a tag from the library</span>
               <div className="row-tight">
                 {lib.tags.map((t) => {
-                  const on = newTagSel === t.id;
+                  const on = newTagIds.includes(t.id);
                   return (
                     <span key={t.id} className={`chip chip-split${on ? ' is-on' : ''}`}>
-                      <span className="chip-body" onClick={() => setNewTagSel(on ? null : t.id)}>
+                      <span
+                        className="chip-body"
+                        onClick={() =>
+                          setNewTagIds((ids) =>
+                            on ? ids.filter((x) => x !== t.id) : [...ids, t.id],
+                          )
+                        }
+                      >
                         <i className={on ? 'ph-fill ph-check-circle' : 'ph ph-tag'} />
                         <span>{t.name}</span>
                       </span>
@@ -458,12 +474,20 @@ function IdeaCard({
 
   const embed = embedUrl(idea.url);
   const downloader = DOWNLOADER_BY_PLATFORM[idea.platform];
-  const addable = lib.tags.filter((t) => t.id !== idea.tagId);
+  // Tags an idea doesn't already carry — the ones worth offering in the picker.
+  const addable = lib.tags.filter((t) => !idea.tagIds.includes(t.id));
+  // idea.tagIds and idea.tags are parallel arrays (both name-ordered server-side).
+  const ownTags = idea.tagIds.map((id, i) => ({ id, name: idea.tags[i] ?? '' }));
 
-  const assignTag = (tagId: number | null) => {
+  const addTag = (tagId: number) => {
     setPickerOpen(false);
     setDraftTag('');
-    guard(() => lib.patchIdea(idea.id, { tagId }));
+    if (idea.tagIds.includes(tagId)) return;
+    guard(() => lib.patchIdea(idea.id, { tagIds: [...idea.tagIds, tagId] }));
+  };
+
+  const removeTag = (tagId: number) => {
+    guard(() => lib.patchIdea(idea.id, { tagIds: idea.tagIds.filter((x) => x !== tagId) }));
   };
 
   const commitDraft = () =>
@@ -472,7 +496,8 @@ function IdeaCard({
       if (!tag) return;
       setDraftTag('');
       setPickerOpen(false);
-      await lib.patchIdea(idea.id, { tagId: tag.id });
+      if (idea.tagIds.includes(tag.id)) return;
+      await lib.patchIdea(idea.id, { tagIds: [...idea.tagIds, tag.id] });
     });
 
   const remove = () =>
@@ -557,24 +582,24 @@ function IdeaCard({
       </div>
 
       <div className="row-tight">
-        {idea.tag && (
-          <span className="chip chip-split is-on" style={{ cursor: 'default' }}>
-            <span>{idea.tag}</span>
-            <span className="icon-x" title="Remove tag" onClick={() => assignTag(null)}>
+        {ownTags.map((t) => (
+          <span key={t.id} className="chip chip-split is-on" style={{ cursor: 'default' }}>
+            <span>{t.name}</span>
+            <span className="icon-x" title="Remove tag" onClick={() => removeTag(t.id)}>
               <i className="ph ph-x" />
             </span>
           </span>
-        )}
+        ))}
         <span className="pill pill-dashed" onClick={() => setPickerOpen((v) => !v)}>
           <i className="ph ph-tag" style={{ fontSize: 12 }} />
-          <span>{idea.tagId === null ? 'Tag' : 'Change'}</span>
+          <span>{idea.tagIds.length === 0 ? 'Tag' : 'Add tag'}</span>
         </span>
       </div>
 
       {pickerOpen && (
         <div className="tag-picker">
           <span className="label-xs" style={{ fontSize: 10, color: 'var(--muted)' }}>
-            {idea.tagId === null ? 'Pick a tag' : 'Replace the tag'}
+            Add a tag
           </span>
           <div className="row-tight">
             {addable.map((t) => (
@@ -582,7 +607,7 @@ function IdeaCard({
                 key={t.id}
                 className="chip"
                 style={{ background: 'rgba(255,255,255,0.07)' }}
-                onClick={() => assignTag(t.id)}
+                onClick={() => addTag(t.id)}
               >
                 {t.name}
               </span>

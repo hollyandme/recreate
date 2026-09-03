@@ -149,7 +149,7 @@ export function BriefsScreen() {
             >
               <i className={platformIcon(idea.platform)} />
               <span>
-                {idea.sourceHandle} · {idea.tag ?? 'untagged'}
+                {idea.sourceHandle} · {idea.tags.length ? idea.tags.join(', ') : 'untagged'}
               </span>
               {idea.status === 'Tried' && (
                 <span className="badge">

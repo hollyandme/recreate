@@ -15,8 +15,8 @@ export interface Idea {
   note: string;
   hook: string;
   body: string;
-  tagId: number | null;
-  tag: string | null;
+  tagIds: number[];
+  tags: string[];
   status: Status;
   savedAt: string;
   briefId: number | null;
@@ -85,11 +85,11 @@ export const api = {
   deleteTag: (id: number) => request<{ clearedFrom: number }>(`/tags/${id}`, { method: 'DELETE' }),
 
   listIdeas: () => request<Idea[]>('/ideas'),
-  createIdea: (input: { url: string; note?: string; tagId?: number | null }) =>
+  createIdea: (input: { url: string; note?: string; tagIds?: number[] }) =>
     request<Idea>('/ideas', { method: 'POST', body: body(input) }),
   updateIdea: (
     id: number,
-    patch: Partial<Pick<Idea, 'note' | 'hook' | 'body' | 'status'>> & { tagId?: number | null },
+    patch: Partial<Pick<Idea, 'note' | 'hook' | 'body' | 'status'>> & { tagIds?: number[] },
   ) => request<Idea>(`/ideas/${id}`, { method: 'PATCH', body: body(patch) }),
   deleteIdea: (id: number) =>
     request<{ deletedBriefId: number | null }>(`/ideas/${id}`, { method: 'DELETE' }),

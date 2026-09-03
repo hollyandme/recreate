@@ -17,9 +17,9 @@ tags.get(
   '/',
   h(async (_req, res) => {
     const rows = await query<{ id: number; name: string; idea_count: number }>(
-      `SELECT t.id, t.name, COUNT(i.id)::int AS idea_count
+      `SELECT t.id, t.name, COUNT(it.idea_id)::int AS idea_count
          FROM tags t
-         LEFT JOIN ideas i ON i.tag_id = t.id
+         LEFT JOIN idea_tags it ON it.tag_id = t.id
         GROUP BY t.id
         ORDER BY t.id`,
     );
@@ -53,7 +53,7 @@ tags.post(
 );
 
 /**
- * Delete a tag from the library. ideas.tag_id is ON DELETE SET NULL, so this
+ * Delete a tag from the library. idea_tags.tag_id is ON DELETE CASCADE, so this
  * also clears it off every idea using it — the count is returned so the UI can
  * say what happened (it confirms with the same number before calling).
  */
@@ -61,7 +61,7 @@ tags.delete(
   '/:id',
   h(async (req, res) => {
     const id = idParam(req);
-    const used = await one<{ n: number }>('SELECT COUNT(*)::int AS n FROM ideas WHERE tag_id = $1', [id]);
+    const used = await one<{ n: number }>('SELECT COUNT(*)::int AS n FROM idea_tags WHERE tag_id = $1', [id]);
     const deleted = await one<{ id: number }>('DELETE FROM tags WHERE id = $1 RETURNING id', [id]);
     if (!deleted) throw new HttpError(404, 'Tag not found');
     res.json({ ok: true, clearedFrom: used?.n ?? 0 });

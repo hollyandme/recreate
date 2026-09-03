@@ -83,10 +83,11 @@ const SELECT_BRIEF = `
          i.hook          AS ref_hook,
          i.body          AS ref_body,
          i.video_key     AS ref_video_key,
-         t.name          AS ref_tag
+         (SELECT string_agg(t.name, ', ' ORDER BY t.name)
+            FROM idea_tags it JOIN tags t ON t.id = it.tag_id
+           WHERE it.idea_id = i.id) AS ref_tag
     FROM briefs b
-    JOIN ideas i ON i.id = b.idea_id
-    LEFT JOIN tags t ON t.id = i.tag_id`;
+    JOIN ideas i ON i.id = b.idea_id`;
 
 async function loadBrief(id: number) {
   const row = await one<BriefRow>(`${SELECT_BRIEF} WHERE b.id = $1`, [id]);
@@ -131,15 +132,18 @@ briefs.post(
       return;
     }
 
-    const idea = await one<{ source_handle: string; note: string; tag_name: string | null }>(
-      `SELECT i.source_handle, i.note, t.name AS tag_name
-         FROM ideas i LEFT JOIN tags t ON t.id = i.tag_id
+    const idea = await one<{ source_handle: string; note: string; tag_names: string | null }>(
+      `SELECT i.source_handle, i.note,
+              (SELECT string_agg(t.name, ', ' ORDER BY t.name)
+                 FROM idea_tags it JOIN tags t ON t.id = it.tag_id
+                WHERE it.idea_id = i.id) AS tag_names
+         FROM ideas i
         WHERE i.id = $1`,
       [ideaId],
     );
     if (!idea) throw new HttpError(404, 'Idea not found');
 
-    const title = `Recreate: ${idea.source_handle}${idea.tag_name ? ` (${idea.tag_name})` : ''}`;
+    const title = `Recreate: ${idea.source_handle}${idea.tag_names ? ` (${idea.tag_names})` : ''}`;
 
     const id = await tx(async (c) => {
       const inserted = await c.query<{ id: number }>(

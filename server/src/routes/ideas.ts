@@ -18,8 +18,8 @@ export interface IdeaRow {
   note: string;
   hook: string;
   body: string;
-  tag_id: number | null;
-  tag_name: string | null;
+  tag_ids: number[];
+  tag_names: string[];
   status: string;
   saved_at: Date;
   video_key: string | null;
@@ -36,8 +36,9 @@ export function serializeIdea(r: IdeaRow) {
     note: r.note,
     hook: r.hook,
     body: r.body,
-    tagId: r.tag_id,
-    tag: r.tag_name,
+    // bigint[] comes back as strings (the INT8 parser is scalar-only), so coerce.
+    tagIds: (r.tag_ids ?? []).map(Number),
+    tags: r.tag_names ?? [],
     status: r.status,
     savedAt: r.saved_at.toISOString(),
     briefId: r.brief_id,
@@ -46,11 +47,18 @@ export function serializeIdea(r: IdeaRow) {
   };
 }
 
+// An idea's tags are aggregated into arrays, ordered by name so chips stay stable.
+// GROUP_IDEA is kept separate so a WHERE clause can be injected before it.
 const SELECT_IDEA = `
-  SELECT i.*, t.name AS tag_name, b.id AS brief_id, (b.id IS NOT NULL) AS has_brief
+  SELECT i.*,
+         COALESCE(array_agg(t.id   ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}') AS tag_ids,
+         COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}') AS tag_names,
+         b.id AS brief_id, (b.id IS NOT NULL) AS has_brief
     FROM ideas i
-    LEFT JOIN tags t   ON t.id = i.tag_id
-    LEFT JOIN briefs b ON b.idea_id = i.id`;
+    LEFT JOIN idea_tags it ON it.idea_id = i.id
+    LEFT JOIN tags t        ON t.id = it.tag_id
+    LEFT JOIN briefs b      ON b.idea_id = i.id`;
+const GROUP_IDEA = 'GROUP BY i.id, b.id';
 
 /**
  * The whole library, newest first.
@@ -76,24 +84,42 @@ ideas.get(
       where.push(`i.status = $${params.length}`);
     }
     if (tagId === 'null') {
-      where.push('i.tag_id IS NULL');
+      where.push('NOT EXISTS (SELECT 1 FROM idea_tags it2 WHERE it2.idea_id = i.id)');
     } else if (typeof tagId === 'string' && tagId) {
       params.push(Number(tagId));
-      where.push(`i.tag_id = $${params.length}`);
+      where.push(
+        `EXISTS (SELECT 1 FROM idea_tags it2 WHERE it2.idea_id = i.id AND it2.tag_id = $${params.length})`,
+      );
     }
 
     const rows = await query<IdeaRow>(
-      `${SELECT_IDEA} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.saved_at DESC, i.id DESC`,
+      `${SELECT_IDEA} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ${GROUP_IDEA} ORDER BY i.saved_at DESC, i.id DESC`,
       params,
     );
     res.json(rows.map(serializeIdea));
   }),
 );
 
+/**
+ * Replace the full set of tags on an idea. Non-existent tag ids are ignored
+ * (selected via the tags table) rather than raising a foreign-key error.
+ */
+async function setIdeaTags(ideaId: number, tagIds: number[]): Promise<void> {
+  await query('DELETE FROM idea_tags WHERE idea_id = $1', [ideaId]);
+  const unique = [...new Set(tagIds)];
+  if (unique.length === 0) return;
+  await query(
+    `INSERT INTO idea_tags (idea_id, tag_id)
+       SELECT $1, id FROM tags WHERE id = ANY($2::bigint[])
+     ON CONFLICT DO NOTHING`,
+    [ideaId, unique],
+  );
+}
+
 const CreateBody = z.object({
   url: z.string().trim().min(1).max(2048),
   note: z.string().trim().max(2000).optional(),
-  tagId: z.number().int().positive().nullable().optional(),
+  tagIds: z.array(z.number().int().positive()).max(50).optional(),
 });
 
 ideas.post(
@@ -101,17 +127,12 @@ ideas.post(
   h(async (req, res) => {
     const input = CreateBody.parse(req.body);
     const created = await one<{ id: number }>(
-      `INSERT INTO ideas (url, platform, source_handle, note, tag_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [
-        input.url,
-        detectPlatform(input.url),
-        detectSource(input.url),
-        input.note ?? '',
-        input.tagId ?? null,
-      ],
+      `INSERT INTO ideas (url, platform, source_handle, note)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [input.url, detectPlatform(input.url), detectSource(input.url), input.note ?? ''],
     );
-    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [created!.id]);
+    await setIdeaTags(created!.id, input.tagIds ?? []);
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [created!.id]);
     res.status(201).json(serializeIdea(row!));
   }),
 );
@@ -122,7 +143,7 @@ const PatchBody = z
     hook: z.string().max(4000),
     body: z.string().max(4000),
     status: z.enum(['To try', 'Tried']),
-    tagId: z.number().int().positive().nullable(),
+    tagIds: z.array(z.number().int().positive()).max(50),
   })
   .partial();
 
@@ -138,7 +159,6 @@ ideas.patch(
     if (input.hook !== undefined) columns.hook = input.hook;
     if (input.body !== undefined) columns.body = input.body;
     if (input.status !== undefined) columns.status = input.status;
-    if (input.tagId !== undefined) columns.tag_id = input.tagId;
 
     const keys = Object.keys(columns);
     if (keys.length) {
@@ -148,9 +168,14 @@ ideas.patch(
         [id, ...keys.map((k) => columns[k])],
       );
       if (!updated) throw new HttpError(404, 'Idea not found');
+    } else if (input.tagIds !== undefined) {
+      const exists = await one<{ id: number }>('SELECT id FROM ideas WHERE id = $1', [id]);
+      if (!exists) throw new HttpError(404, 'Idea not found');
     }
 
-    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    if (input.tagIds !== undefined) await setIdeaTags(id, input.tagIds);
+
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [id]);
     if (!row) throw new HttpError(404, 'Idea not found');
     res.json(serializeIdea(row));
   }),
@@ -212,7 +237,7 @@ ideas.post(
       storage.remove(existing.video_key).catch((err) => console.error('storage delete failed', err));
     }
 
-    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [id]);
     res.status(201).json(serializeIdea(row!));
   }),
 );
@@ -227,7 +252,7 @@ ideas.delete(
       [id],
     );
     if (!updated) throw new HttpError(404, 'Idea not found');
-    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1`, [id]);
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [id]);
     res.json(serializeIdea(row!));
   }),
 );
