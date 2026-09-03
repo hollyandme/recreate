@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 import { api, type Idea, type Platform, type Status } from '../lib/api';
@@ -661,10 +662,11 @@ function IdeaCard({
         </button>
       </div>
 
-      {recreateOpen && (
-        <div className="modal-backdrop" onClick={() => setRecreateOpen(false)}>
-          <section
-            className="glass panel modal recreate-modal"
+      {recreateOpen &&
+        createPortal(
+          <div className="modal-backdrop" onClick={() => setRecreateOpen(false)}>
+            <section
+              className="glass panel modal recreate-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Recreate this format"
@@ -713,8 +715,9 @@ function IdeaCard({
               </button>
             </div>
           </section>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </article>
   );
 }
