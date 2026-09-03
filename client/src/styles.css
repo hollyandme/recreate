@@ -617,6 +617,86 @@ textarea.input {
 }
 .fallback i { font-size: 15px; }
 
+/* ── Media tile (mirrors the dashboard's 9:16 post tiles) ─────────────────── */
+.idea-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 520px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #16121b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+.idea-media-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  background: #16121b;
+  display: block;
+}
+.idea-media-play {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  margin: auto;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(10, 5, 4, 0.5);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  pointer-events: none;
+}
+.idea-media-play i { font-size: 22px; margin-left: 3px; }
+.idea-media-open {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #ffe3cd;
+  text-decoration: none;
+  background: rgba(10, 5, 4, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.idea-media--empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+}
+.idea-media-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 246, 239, 0.85);
+  background: rgba(10, 5, 4, 0.5);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.idea-media-empty-note { font-size: 11px; color: rgba(246, 236, 230, 0.45); }
+
 .inset-block {
   display: grid;
   gap: var(--s3);

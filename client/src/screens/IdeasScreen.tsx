@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, type Idea, type Platform, type Status } from '../lib/api';
-import { embedHeight, embedUrl, platformIcon, savedLabel } from '../lib/embed';
+import { embedUrl, platformIcon, savedLabel } from '../lib/embed';
 import { useLibrary } from '../lib/store';
 import { DOWNLOADER_BY_PLATFORM, openDownloader } from '../lib/download';
 import { AutoTextarea } from '../components/AutoField';
@@ -301,6 +301,86 @@ function Segmented<T extends string>({
   );
 }
 
+/* ── Media tile ───────────────────────────────────────────────────────────── */
+/**
+ * A self-contained 9:16 tile matching the dashboard's post tiles. An attached
+ * video file plays inline (click to toggle); otherwise the platform embed fills
+ * the same frame; a saved link with no embed shows a Preview placeholder.
+ */
+function MediaTile({ idea, embed }: { idea: Idea; embed: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const toggle = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      void v.play().catch(() => {});
+      setPlaying(true);
+    } else {
+      v.pause();
+      setPlaying(false);
+    }
+  };
+
+  if (idea.videoUrl) {
+    return (
+      <div className="idea-media" onClick={toggle} style={{ cursor: 'pointer' }}>
+        <video
+          ref={videoRef}
+          className="idea-media-fill"
+          src={idea.videoUrl}
+          playsInline
+          loop
+          preload="metadata"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+        />
+        {!playing && (
+          <span className="idea-media-play">
+            <i className="ph-fill ph-play" />
+          </span>
+        )}
+        <a
+          className="idea-media-open"
+          href={idea.url}
+          target="_blank"
+          rel="noreferrer"
+          title="Open original"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <i className="ph ph-arrow-up-right" />
+        </a>
+      </div>
+    );
+  }
+
+  if (embed) {
+    return (
+      <div className="idea-media">
+        <iframe
+          className="idea-media-fill"
+          src={embed}
+          loading="lazy"
+          allowFullScreen
+          scrolling="no"
+          title={idea.sourceHandle}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="idea-media idea-media--empty">
+      <span className="idea-media-badge">
+        <i className="ph ph-image-square" />
+        Preview
+      </span>
+      <span className="idea-media-empty-note">No embeddable video at this link</span>
+    </div>
+  );
+}
+
 /* ── One saved idea ───────────────────────────────────────────────────────── */
 function IdeaCard({
   idea,
@@ -370,23 +450,14 @@ function IdeaCard({
         </a>
       </div>
 
-      {embed ? (
-        <div className="embed-wrap">
-          <div className="embed-frame" style={{ height: embedHeight(idea.platform) }}>
-            <iframe src={embed} loading="lazy" allowFullScreen scrolling="auto" title={idea.sourceHandle} />
-          </div>
-          <div className="embed-note">
-            <i className="ph ph-info" />
-            <span>Nothing playing means the post is private or removed.</span>
-            <a href={idea.url} target="_blank" rel="noreferrer">
-              Open original
-            </a>
-          </div>
-        </div>
-      ) : (
-        <div className="fallback">
-          <i className="ph ph-video-camera-slash" />
-          <span>No embeddable video at this link</span>
+      <MediaTile idea={idea} embed={embed} />
+      {embed && !idea.videoUrl && (
+        <div className="embed-note">
+          <i className="ph ph-info" />
+          <span>Nothing playing means the post is private or removed.</span>
+          <a href={idea.url} target="_blank" rel="noreferrer">
+            Open original
+          </a>
         </div>
       )}
 
