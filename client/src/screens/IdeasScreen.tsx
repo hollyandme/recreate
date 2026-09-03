@@ -362,7 +362,6 @@ function Segmented<T extends string>({
 function MediaTile({ idea, embed }: { idea: Idea; embed: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [embedLoaded, setEmbedLoaded] = useState(false);
 
   const toggleVideo = () => {
     const v = videoRef.current;
@@ -413,30 +412,21 @@ function MediaTile({ idea, embed }: { idea: Idea; embed: string }) {
     );
   }
 
-  // 2) No file: the first click loads the platform player inline, rather than
-  // the embed's default of jumping to the post — so every tile plays in place.
+  // 2) No file: embed the platform player directly so its cover frame shows as
+  // a preview (a link only ever gives us the embed, never a stored thumbnail).
+  // TikTok plays in place; Instagram shows the cover and opens the post.
   if (embed) {
     return (
-      <div
-        className="idea-media"
-        onClick={() => setEmbedLoaded(true)}
-        style={{ cursor: embedLoaded ? 'default' : 'pointer' }}
-      >
-        {embedLoaded ? (
-          <iframe
-            className="idea-media-fill"
-            src={embed}
-            loading="lazy"
-            allow="autoplay; encrypted-media; fullscreen; clipboard-write"
-            allowFullScreen
-            scrolling="no"
-            title={idea.sourceHandle}
-          />
-        ) : (
-          <span className="idea-media-play">
-            <i className="ph-fill ph-play" />
-          </span>
-        )}
+      <div className="idea-media">
+        <iframe
+          className="idea-media-fill"
+          src={embed}
+          loading="lazy"
+          allow="autoplay; encrypted-media; fullscreen; clipboard-write"
+          allowFullScreen
+          scrolling="no"
+          title={idea.sourceHandle}
+        />
         {openBtn}
       </div>
     );
@@ -546,7 +536,7 @@ function IdeaCard({
       {embed && !idea.videoUrl && (
         <div className="embed-note">
           <i className="ph ph-info" />
-          <span>Click to play here. Nothing playing means the post is private or removed.</span>
+          <span>A blank preview means the post is private or removed.</span>
           <a href={idea.url} target="_blank" rel="noreferrer">
             Open original
           </a>
