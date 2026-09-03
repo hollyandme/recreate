@@ -543,6 +543,31 @@ textarea.input {
 }
 .badge i { font-size: 11px; }
 
+/* Prominent status toggle at the top of an idea card. */
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  color: var(--accent-300);
+  background: rgba(255, 147, 81, 0.16);
+  border: 1px solid rgba(255, 177, 128, 0.5);
+  transition: filter 0.12s ease;
+}
+.status-toggle i { font-size: 15px; }
+.status-toggle:hover { filter: brightness(1.09); }
+.status-toggle.is-tried {
+  color: #7ee2a8;
+  background: rgba(52, 211, 153, 0.16);
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
 /* ── Idea board ──────────────────────────────────────────────────────────── */
 .board {
   display: grid;
@@ -580,7 +605,7 @@ textarea.input {
 }
 .idea-id { display: flex; flex-direction: column; min-width: 0; }
 .idea-handle { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.idea-date { font-size: 11px; color: rgba(246, 236, 230, 0.45); }
+.idea-date { font-size: 11px; color: rgba(246, 236, 230, 0.45); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .idea-note { margin: 0; font-size: 14px; line-height: 1.45; text-wrap: pretty; }
 
 /* The embed bleeds to the card's edges, framed by a hairline top and bottom. */

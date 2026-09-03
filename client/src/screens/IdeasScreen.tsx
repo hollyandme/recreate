@@ -458,13 +458,24 @@ function IdeaCard({
           <span className="idea-handle">{idea.sourceHandle}</span>
           <span className="idea-date">Saved {savedLabel(idea.savedAt)}</span>
         </div>
+        <button
+          className={`status-toggle${idea.status === 'Tried' ? ' is-tried' : ''}`}
+          style={{ marginLeft: 'auto' }}
+          title={idea.status === 'Tried' ? 'Mark as to try' : 'Mark as tried'}
+          onClick={() =>
+            guard(() => lib.patchIdea(idea.id, { status: idea.status === 'Tried' ? 'To try' : 'Tried' }))
+          }
+        >
+          <i className={idea.status === 'Tried' ? 'ph-fill ph-check-circle' : 'ph ph-flag'} />
+          <span>{idea.status}</span>
+        </button>
         <a
           className="icon-quiet is-bordered"
           href={idea.url}
           target="_blank"
           rel="noreferrer"
           title="Open the original"
-          style={{ marginLeft: 'auto', textDecoration: 'none' }}
+          style={{ textDecoration: 'none' }}
         >
           <i className="ph ph-arrow-up-right" />
         </a>
@@ -565,15 +576,6 @@ function IdeaCard({
       )}
 
       <div className="card-foot">
-        <span
-          className={`pill${idea.status === 'Tried' ? ' is-on' : ''}`}
-          onClick={() =>
-            guard(() => lib.patchIdea(idea.id, { status: idea.status === 'Tried' ? 'To try' : 'Tried' }))
-          }
-        >
-          <i className={idea.status === 'Tried' ? 'ph-fill ph-check-circle' : 'ph ph-flag'} />
-          <span>{idea.status}</span>
-        </span>
         <span className="pill" onClick={onBrief}>
           <i className="ph ph-list-numbers" />
           <span>Brief</span>
