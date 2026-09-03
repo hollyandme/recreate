@@ -457,6 +457,17 @@ function IdeaCard({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftTag, setDraftTag] = useState('');
   const [copied, setCopied] = useState(false);
+  const [recreateOpen, setRecreateOpen] = useState(false);
+
+  // Close the Recreate chooser on Escape.
+  useEffect(() => {
+    if (!recreateOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRecreateOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [recreateOpen]);
 
   const guard = (fn: () => Promise<unknown>) => {
     fn().catch((err) => onProblem(err instanceof Error ? err.message : 'Something went wrong'));
@@ -627,10 +638,10 @@ function IdeaCard({
       )}
 
       <div className="card-foot">
-        <span className="pill" onClick={onBrief}>
-          <i className="ph ph-list-numbers" />
-          <span>Brief</span>
-        </span>
+        <button className="recreate-btn" onClick={() => setRecreateOpen(true)}>
+          <i className="ph-fill ph-sparkle" />
+          <span>Recreate</span>
+        </button>
         {downloader && (
           <span
             className="pill"
@@ -649,6 +660,61 @@ function IdeaCard({
           <i className="ph ph-trash" />
         </button>
       </div>
+
+      {recreateOpen && (
+        <div className="modal-backdrop" onClick={() => setRecreateOpen(false)}>
+          <section
+            className="glass panel modal recreate-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Recreate this format"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div className="panel-head" style={{ flex: 1 }}>
+                <h2>Recreate this format</h2>
+                <span>{idea.sourceHandle} · pick how you want to make your version</span>
+              </div>
+              <button className="icon-quiet is-bordered" title="Close" onClick={() => setRecreateOpen(false)}>
+                <i className="ph ph-x" />
+              </button>
+            </div>
+
+            <div className="recreate-choices">
+              <button
+                className="recreate-choice"
+                onClick={() => {
+                  setRecreateOpen(false);
+                  onBrief();
+                }}
+              >
+                <span className="recreate-choice-ic">
+                  <i className="ph ph-list-numbers" />
+                </span>
+                <span className="recreate-choice-body">
+                  <span className="recreate-choice-title">Creator Brief</span>
+                  <span className="recreate-choice-desc">
+                    Turn this into a shot-by-shot brief to hand a creator.
+                  </span>
+                </span>
+                <i className="ph ph-arrow-right recreate-choice-go" />
+              </button>
+
+              <button className="recreate-choice is-soon" disabled title="Coming soon">
+                <span className="recreate-choice-ic">
+                  <i className="ph ph-ghost" />
+                </span>
+                <span className="recreate-choice-body">
+                  <span className="recreate-choice-title">
+                    Ghost Create <span className="soon-badge">Soon</span>
+                  </span>
+                  <span className="recreate-choice-desc">Recreate it yourself, guided end to end.</span>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </article>
   );
 }
