@@ -140,7 +140,7 @@ export function IdeasScreen() {
           </div>
           <h1 className="page-title">A library of ideas worth stealing</h1>
         </div>
-        <button className="btn btn-accent" onClick={() => setAddOpen(true)}>
+        <button className="addbtn" onClick={() => setAddOpen(true)}>
           <i className="ph ph-plus" />
           <span>Add format</span>
         </button>
