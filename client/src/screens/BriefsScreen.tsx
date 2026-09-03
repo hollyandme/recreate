@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { api, type Brief, type Shot, type Stroke } from '../lib/api';
-import { platformIcon } from '../lib/embed';
 import { useLibrary } from '../lib/store';
 import { AutoInput, AutoTextarea } from '../components/AutoField';
 import { ShotFrame } from '../components/ShotFrame';
@@ -100,18 +99,6 @@ export function BriefsScreen() {
       );
     });
 
-  const pickIdea = (ideaId: number, existing: number | null) =>
-    guard(async () => {
-      if (existing) {
-        navigate(`/briefs/${existing}`);
-        return;
-      }
-      const created = await api.openBrief(ideaId);
-      // The board now knows this idea has a brief, so its chip shows a check.
-      await lib.refresh();
-      navigate(`/briefs/${created.id}`);
-    });
-
   return (
     <div className="screen">
       <header className="page-head no-print">
@@ -133,40 +120,6 @@ export function BriefsScreen() {
           <span>{problem}</span>
         </div>
       )}
-
-      {/* This row is the brief switcher; there is no separate tab strip. */}
-      <section className="glass panel no-print">
-        <div className="panel-head">
-          <h2>Pick the video to brief</h2>
-          <span>One brief per video — the link, tag and your hook and body comments carry over</span>
-        </div>
-        <div className="row-tight">
-          {lib.ideas.map((idea) => (
-            <span
-              key={idea.id}
-              className={`pill${brief && idea.briefId === brief.id ? ' is-on' : ''}`}
-              onClick={() => pickIdea(idea.id, idea.briefId)}
-            >
-              <i className={platformIcon(idea.platform)} />
-              <span>
-                {idea.sourceHandle} · {idea.tags.length ? idea.tags.join(', ') : 'untagged'}
-              </span>
-              {idea.status === 'Tried' && (
-                <span className="badge">
-                  <i className="ph-fill ph-check-circle" />
-                  <span>Tried</span>
-                </span>
-              )}
-              <i className={idea.briefId ? 'ph-fill ph-check-circle' : 'ph ph-plus'} style={{ fontSize: 12 }} />
-            </span>
-          ))}
-          {lib.ideas.length === 0 && (
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Nothing saved yet — add an idea on Format ideas first.
-            </span>
-          )}
-        </div>
-      </section>
 
       {brief ? (
         <section className="glass brief-sheet">
@@ -394,8 +347,8 @@ export function BriefsScreen() {
         <div className="empty-state">
           <i className="ph ph-list-numbers" />
           <span>
-            Pick a saved idea above to start a brief. Screenshots are dropped in by hand — grab the frames
-            from the original post.
+            Open a format idea and hit Recreate → Creator Brief to start one. Screenshots are dropped in
+            by hand — grab the frames from the original post.
           </span>
         </div>
       )}
