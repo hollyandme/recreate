@@ -691,7 +691,7 @@ function IdeaCard({
                 }}
               >
                 <span className="recreate-choice-ic">
-                  <i className="ph ph-list-numbers" />
+                  <i className="ph ph-user-focus" />
                 </span>
                 <span className="recreate-choice-body">
                   <span className="recreate-choice-title">Creator Brief</span>
