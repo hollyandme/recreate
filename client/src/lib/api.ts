@@ -99,6 +99,9 @@ export const api = {
     return request<Idea>(`/ideas/${id}/video`, { method: 'POST', body: form });
   },
   clearIdeaVideo: (id: number) => request<Idea>(`/ideas/${id}/video`, { method: 'DELETE' }),
+  /** Fetch the post's video server-side and attach it (throws on failure). */
+  downloadIdeaVideo: (id: number) =>
+    request<Idea>(`/ideas/${id}/download-video`, { method: 'POST' }),
 
   listBriefs: () => request<Brief[]>('/briefs'),
   getBrief: (id: number) => request<Brief>(`/briefs/${id}`),

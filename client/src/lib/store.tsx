@@ -19,6 +19,7 @@ interface Library {
   addIdea: (input: { url: string; note?: string; tagIds?: number[] }) => Promise<void>;
   patchIdea: (id: number, patch: Parameters<typeof api.updateIdea>[1]) => Promise<void>;
   removeIdea: (id: number) => Promise<void>;
+  downloadIdeaVideo: (id: number) => Promise<void>;
   createTag: (name: string) => Promise<Tag | null>;
   removeTag: (id: number) => Promise<void>;
 }
@@ -80,6 +81,13 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         await api.deleteIdea(id);
         setIdeas((list) => list.filter((x) => x.id !== id));
         setTags(await api.listTags());
+      },
+
+      // Server-side download; the video attaches to the idea (used in the brief),
+      // the card preview is unaffected. Throws so the caller can fall back.
+      downloadIdeaVideo: async (id) => {
+        const updated = await api.downloadIdeaVideo(id);
+        replaceIdea(updated);
       },
 
       createTag: async (name) => {

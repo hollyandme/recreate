@@ -1,0 +1,5 @@
+# Install yt-dlp (+ ffmpeg) alongside the auto-detected Node toolchain so the
+# server can fetch a post's video directly. The "..." keeps Nixpacks' own
+# Node/npm packages; we only append these two.
+[phases.setup]
+nixPkgs = ["...", "yt-dlp", "ffmpeg"]

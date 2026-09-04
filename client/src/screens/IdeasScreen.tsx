@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
@@ -356,26 +356,12 @@ function Segmented<T extends string>({
 
 /* ── Media tile ───────────────────────────────────────────────────────────── */
 /**
- * A self-contained 9:16 tile matching the dashboard's post tiles. An attached
- * video file plays inline (click to toggle); otherwise the platform embed fills
- * the same frame; a saved link with no embed shows a Preview placeholder.
+ * The preview is always the platform embed, never a downloaded file: the embed
+ * carries the live view/like counts, which are worth keeping in the overview. A
+ * video that gets downloaded lands in the brief, not here. A saved link with no
+ * embed shows a Preview placeholder.
  */
 function MediaTile({ idea, embed }: { idea: Idea; embed: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-
-  const toggleVideo = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) {
-      void v.play().catch(() => {});
-      setPlaying(true);
-    } else {
-      v.pause();
-      setPlaying(false);
-    }
-  };
-
   const openBtn = (
     <a
       className="idea-media-open"
@@ -389,33 +375,8 @@ function MediaTile({ idea, embed }: { idea: Idea; embed: string }) {
     </a>
   );
 
-  // 1) A downloaded video file plays truly inline (click toggles play/pause).
-  if (idea.videoUrl) {
-    return (
-      <div className="idea-media" onClick={toggleVideo} style={{ cursor: 'pointer' }}>
-        <video
-          ref={videoRef}
-          className="idea-media-fill"
-          src={idea.videoUrl}
-          playsInline
-          loop
-          preload="metadata"
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-        />
-        {!playing && (
-          <span className="idea-media-play">
-            <i className="ph-fill ph-play" />
-          </span>
-        )}
-        {openBtn}
-      </div>
-    );
-  }
-
-  // 2) No file: embed the platform player directly so its cover frame shows as
-  // a preview (a link only ever gives us the embed, never a stored thumbnail).
-  // TikTok plays in place; Instagram shows the cover and opens the post.
+  // TikTok plays in place; Instagram shows the cover (with its counts) and opens
+  // the post. Either way the embed stays the source of truth for the preview.
   if (embed) {
     return (
       <div className="idea-media">
@@ -459,6 +420,7 @@ function IdeaCard({
   const [draftTag, setDraftTag] = useState('');
   const [copied, setCopied] = useState(false);
   const [recreateOpen, setRecreateOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   // Close the Recreate chooser on Escape.
   useEffect(() => {
@@ -545,7 +507,7 @@ function IdeaCard({
       </div>
 
       <MediaTile idea={idea} embed={embed} />
-      {embed && !idea.videoUrl && (
+      {embed && (
         <div className="embed-note">
           <i className="ph ph-info" />
           <span>A blank preview means the post is private or removed.</span>
@@ -646,15 +608,46 @@ function IdeaCard({
         {downloader && (
           <span
             className="pill"
-            title={`Copy this link and open ${downloader.name} to download the video`}
+            title={
+              idea.videoUrl
+                ? 'Video saved to the brief — click to fetch it again'
+                : `Download the video into the brief (falls back to ${downloader.name} if it can't)`
+            }
             onClick={async () => {
-              const ok = await openDownloader(idea.url, downloader);
-              setCopied(ok);
-              window.setTimeout(() => setCopied(false), 2500);
+              if (downloading) return;
+              setDownloading(true);
+              try {
+                // Attaches the video to the idea for the brief; the preview is untouched.
+                await lib.downloadIdeaVideo(idea.id);
+              } catch {
+                // Server download failed (e.g. Instagram login) — hand off to the
+                // manual downloader, exactly as before.
+                const ok = await openDownloader(idea.url, downloader);
+                setCopied(ok);
+                window.setTimeout(() => setCopied(false), 2500);
+              } finally {
+                setDownloading(false);
+              }
             }}
           >
-            <i className={idea.videoUrl ? 'ph-fill ph-check-circle' : 'ph ph-download-simple'} />
-            <span>{copied ? 'Link copied' : 'Get video'}</span>
+            <i
+              className={
+                downloading
+                  ? 'ph ph-cloud-arrow-down'
+                  : idea.videoUrl
+                    ? 'ph-fill ph-check-circle'
+                    : 'ph ph-download-simple'
+              }
+            />
+            <span>
+              {downloading
+                ? 'Downloading…'
+                : copied
+                  ? 'Link copied'
+                  : idea.videoUrl
+                    ? 'Video saved'
+                    : 'Get video'}
+            </span>
           </span>
         )}
         <button className="icon-quiet" title="Remove" style={{ marginLeft: 'auto' }} onClick={remove}>

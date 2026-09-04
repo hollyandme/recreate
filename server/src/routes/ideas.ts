@@ -6,6 +6,7 @@ import { detectPlatform, detectSource } from '../lib/links.js';
 import { removeImagesForIdea, removeVideoForIdea } from '../lib/cleanup.js';
 import { newVideoKey, storage } from '../lib/storage.js';
 import { sniffVideoType } from '../lib/sniff.js';
+import { DownloadError, downloadPostVideo } from '../lib/ytdlp.js';
 import multer from 'multer';
 
 export const ideas = Router();
@@ -254,5 +255,50 @@ ideas.delete(
     if (!updated) throw new HttpError(404, 'Idea not found');
     const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [id]);
     res.json(serializeIdea(row!));
+  }),
+);
+
+/**
+ * Fetch the post's video server-side (yt-dlp) and attach it, so the reference
+ * video is available in the brief without the third-party downloader dance. On
+ * any failure we answer 502 with `fallback: true`; the client then offers the
+ * manual downloader link, so the user is never worse off than before.
+ */
+ideas.post(
+  '/:id/download-video',
+  h(async (req, res) => {
+    const id = idParam(req);
+    const idea = await one<{ url: string; platform: string; video_key: string | null }>(
+      'SELECT url, platform, video_key FROM ideas WHERE id = $1',
+      [id],
+    );
+    if (!idea) throw new HttpError(404, 'Idea not found');
+    if (idea.platform === 'Link') throw new HttpError(400, 'A plain link has no video to download.');
+
+    let buffer: Buffer;
+    try {
+      buffer = await downloadPostVideo(idea.url);
+    } catch (err) {
+      const fallback = err instanceof DownloadError ? err.fallback : true;
+      const message = err instanceof Error ? err.message : 'Could not download this video.';
+      res.status(502).json({ error: message, fallback });
+      return;
+    }
+
+    const sniffed = sniffVideoType(buffer);
+    if (!sniffed) {
+      res.status(502).json({ error: 'The downloaded file is not a supported video.', fallback: true });
+      return;
+    }
+
+    const key = newVideoKey(sniffed);
+    await storage.put(key, buffer, sniffed);
+    await query('UPDATE ideas SET video_key = $2 WHERE id = $1', [id, key]);
+    if (idea.video_key) {
+      storage.remove(idea.video_key).catch((err) => console.error('storage delete failed', err));
+    }
+
+    const row = await one<IdeaRow>(`${SELECT_IDEA} WHERE i.id = $1 ${GROUP_IDEA}`, [id]);
+    res.status(201).json(serializeIdea(row!));
   }),
 );
